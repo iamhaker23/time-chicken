@@ -4,7 +4,8 @@ from tc_utils import doGameLoopAndRender, TCGameObject
 pygame.init()
 pygame.font.init()
 
-myfont = pygame.font.Font('Assets/Fonts/tc_1_bold.ttf', 80)
+bigfont = pygame.font.Font('Assets/Fonts/tc_1_bold.ttf', 80)
+smallfont = pygame.font.Font('Assets/Fonts/tc_1.ttf', 40)
 
 ################################# START Game Config
 IMAGE_HOME = "Assets/Images/"
@@ -27,8 +28,8 @@ scene_groups = [layer1, layer2]
 
 chickenControls = {
     "ALWAYS":[('walk', True)]
-    ,str(pygame.K_RIGHT):[('x', 1)]
-    ,str(pygame.K_LEFT):[('x', -1)]
+    ,str(pygame.K_RIGHT):[('x', 5)]
+    ,str(pygame.K_LEFT):[('x', -5)]
     ,str(pygame.K_SPACE):[('walk', False), ('frames-to-jump', 15)]
 }
 
@@ -64,6 +65,9 @@ cast = 0
 spells = ["toot"]
 message = {"text":"", "color": (255, 255, 255), "frames":0, "position":(0,0)}
 
+spellbook = False
+paused = False
+
 while not closegame:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -73,44 +77,67 @@ while not closegame:
                 
         if event.type == pygame.KEYDOWN:
             keys_pressed[str(event.key)] = True
-            if pygame.K_a <= event.key and pygame.K_z >= event.key and cast == 0:
+            #allow typing even when cancelled for more seamless gameplay
+            if not paused and not spellbook and pygame.K_a <= event.key and pygame.K_z >= event.key and cast == 0: #and message["frames"] == 0:
                 spell["text"] += pygame.key.name(event.key)
-            elif pygame.K_RETURN == event.key and message["text"] == "" and spell["text"] != "" and cast == 0:
+            elif not paused and not spellbook and pygame.K_RETURN == event.key and message["text"] == "" and spell["text"] != "" and cast == 0:
                 spell["text"] = ""
                 message["text"] = "CANCEL!"
                 message["color"] = (255, 155, 155)
                 message["frames"] = 30
+            elif not paused and event.key == pygame.K_TAB:
+                spellbook = True
+            elif event.key == pygame.K_ESCAPE:
+                spellbook = False
+                paused = not paused
+                #tint current screen before pause text draws
+                gameDisplay.fill((0, 40, 75), special_flags=pygame.BLEND_RGBA_MULT)
+            elif paused and (pygame.key.get_mods() & pygame.KMOD_CTRL) and event.key == pygame.K_s:
+                closegame = True
         if event.type == pygame.KEYUP:
             keys_pressed[str(event.key)] = False
+            if event.key == pygame.K_TAB:
+                spellbook = False
         ######################        
     
     
-    gameDisplay.fill(black)
-    for scene in scene_groups:
-        doGameLoopAndRender(scene, gameDisplay, clock, keys_pressed)
+    
+    
+    if not spellbook and not paused:
+        gameDisplay.fill(black)
+        for scene in scene_groups:
+            doGameLoopAndRender(scene, gameDisplay, clock, keys_pressed)
+            
+        spell["position"] = (chicken.rect.x + 50, chicken.rect.y - 80)
         
-    spell["position"] = (chicken.rect.x + 50, chicken.rect.y - 80)
-    
-    gameDisplay.blit(myfont.render(spell["text"], True, tuple(spell["color"])), spell["position"])
-    print(cast)
-    if cast > 0:
-        cast -= 1
-        spell["color"][0] -= 2
-        spell["color"][1] -= 5
-        spell["color"][2] -= 10
-        if cast == 0:
-            spell["text"] = ""
-    
-    if message["text"] != "" and message["frames"] > 0:
-        if (message["text"] == "CANCEL!"):
-            message["position"] = spell["position"]
+        gameDisplay.blit(bigfont.render(spell["text"], True, tuple(spell["color"])), spell["position"])
+        
+        if cast > 0:
+            cast -= 1
+            spell["color"][0] -= 2
+            spell["color"][1] -= 5
+            spell["color"][2] -= 10
+            if cast == 0:
+                spell["text"] = ""
+                spell["color"] = [255, 255, 255]
+        
+        if message["text"] != "" and message["frames"] > 0:
+            if (message["text"] == "CANCEL!"):
+                message["position"] = spell["position"]
+            else:
+                message["position"] = (spell["position"][0], spell["position"][1] - 60)
+            gameDisplay.blit(bigfont.render(message["text"], True, message["color"]), message["position"])
+            message["frames"] -= 1
         else:
-            message["position"] = (spell["position"][0], spell["position"][1] - 60)
-        gameDisplay.blit(myfont.render(message["text"], True, message["color"]), message["position"])
-        message["frames"] -= 1
-    else:
-        message["text"] = ""
-    
+            message["text"] = ""
+    elif spellbook:
+        gameDisplay.blit(bigfont.render("SPELLBOOK", True, (255, 255, 200)), (580, 20))
+    elif paused:
+        gameDisplay.blit(bigfont.render("PAUSED", True, (255, 255, 155)), (580, 20))
+        gameDisplay.blit(smallfont.render("ESC to resume", True, (255, 255, 155)), (580, 150))
+        gameDisplay.blit(smallfont.render("CTRL-S to save and quit", True, (255, 255, 155)), (580, 280))
+        
+        
     pygame.display.update()
     clock.tick(60)
     
