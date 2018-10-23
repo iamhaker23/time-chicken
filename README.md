@@ -8,13 +8,13 @@ Escape the realm and protect the egg from the forces of good.
 You are Time Chicken. The Chicken with powers. Time powers.
 
   
-#How To Play
+# How To Play
   - Jump over enemies (SPACEBAR)
   - Type spells to cast (ABCDEFGHIJKLMNOPQRSTUVWXYZ)
   - ~~Check your spell list (TAB)~~
   - ~~Pause/Save/Quit (ESC)~~
 
-#Windows Usage
+# Windows Usage
 In CMD:
   - cd <path-to>\TimeChicken
   - python -m venv venv
