@@ -1,7 +1,11 @@
 import pygame
-from tc_utils import TCGameObject, makeEnemy
+from tc_utils import TCGameObject, Background, Enemy, makeEnemy
 
 class Game:
+    
+    def __init__(self):
+        self.closegame = False
+
     def run(self):
         pygame.init()
         pygame.font.init()
@@ -17,18 +21,24 @@ class Game:
         pygame.display.set_caption('Time Chicken from Chicken Coup')
         black = (60, 84, 145)
         white = (225,225,225)
-        closegame = False
+        self.closegame = False
+        reset = False
         clock = pygame.time.Clock()
         keys_pressed = {"ALWAYS" : True}
         timePassedLastFrame = 0
+        TEXT_X = 475
+        hp = 100
+        distance = 0
         ################################# END Game Config
 
         layer1 = pygame.sprite.LayeredUpdates()
         layer2 = pygame.sprite.LayeredUpdates()
         enemies = pygame.sprite.LayeredUpdates()
-
+        background = pygame.sprite.LayeredUpdates()
+        
         scene_groups = {
-            "enemies": enemies
+            "background": background
+            ,"enemies": enemies
             ,"player": layer1
             ,"foreground" : layer2
         }
@@ -46,7 +56,8 @@ class Game:
         }
 
         chicken = TCGameObject("chicken", IMAGE_HOME, chickenAnims, chickenControls, (80,0), (0, 60))
-
+        chicken.physics = True
+        
         eggAnims = {
             "default" : ['Egg_1.png', 'Egg_2.png', 'Egg_3.png', 'Egg_4.png', 'Egg_5.png', 'Egg_6.png', 'Egg_7.png', 'Egg_8.png' ]
         }
@@ -59,11 +70,16 @@ class Game:
 
         egg.slowParentDelay = 10
         egg.parent = chicken
-        egg.physics = False
 
 
         layer1.add(chicken)
         layer2.add(egg)
+        
+        bg1 = Background("grass", IMAGE_HOME, {"default":["grass_1.png"]}, None, position=(0, 610))
+        background.add(bg1)
+        
+        bg2 = Background("clouds", IMAGE_HOME, {"default":["clouds_1.png"]}, None, position=(0, 50))
+        background.add(bg2)
 
         print("Initialising Time Chicken...")
 
@@ -75,20 +91,20 @@ class Game:
             ,"cluck":"???"
             ,"pipipi":"???"
             ,"kukareku":"???"
-            ,"cock a doodle doo":"???"
-            ,"cheek peep":"???"
-            ,"tock tock":"???"
-            ,"gut gut gdak":"???"
-            }
+            ,"cockadoodledoo":"???"
+            ,"cheekpeep":"???"
+            ,"tocktock":"???"
+            ,"gutgutgdak":"???"
+        }
         message = {"text":"", "color": (255, 255, 255), "frames":0, "position":(0,0)}
 
         spellbook = False
         paused = False
 
-        while not closegame:
+        while not self.closegame and not reset:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    closegame = True
+                    self.closegame = True
 
                 ############################
                         
@@ -97,7 +113,7 @@ class Game:
                     #allow typing even when cancelled for more seamless gameplay
                     if not paused and not spellbook and pygame.K_a <= event.key and pygame.K_z >= event.key and cast == 0: #and message["frames"] == 0:
                         spell["text"] += pygame.key.name(event.key)
-                    elif not paused and not spellbook and pygame.K_RETURN == event.key and message["text"] == "" and spell["text"] != "" and cast == 0:
+                    elif not paused and not spellbook and pygame.K_BACKSPACE == event.key and message["text"] == "" and spell["text"] != "" and cast == 0:
                         spell["text"] = ""
                         message["text"] = "CANCEL!"
                         message["color"] = (255, 155, 155)
@@ -110,7 +126,7 @@ class Game:
                         #tint current screen before pause text draws
                         gameDisplay.fill((0, 40, 75), special_flags=pygame.BLEND_RGBA_MULT)
                     elif paused and (pygame.key.get_mods() & pygame.KMOD_CTRL) and event.key == pygame.K_s:
-                        closegame = True
+                        self.closegame = True
                 if event.type == pygame.KEYUP:
                     keys_pressed[str(event.key)] = False
                     if event.key == pygame.K_TAB:
@@ -122,15 +138,22 @@ class Game:
             
             if not spellbook and not paused:
                 gameDisplay.fill(black)
+                
+                collisions = pygame.sprite.spritecollide(chicken, enemies, False, pygame.sprite.collide_circle_ratio(0.5))
+                hp -= len(collisions)
+                
                 for scene_group in scene_groups:
-                    if scene_group == "enemies":
-                        collisions = pygame.sprite.spritecollide(chicken, enemies, False, pygame.sprite.collide_circle_ratio(0.5))
-                        for enemy in scene_groups[scene_group].sprites():
-                            enemy.update(keys_pressed, clock, collisions)
-                    else:
-                        for gameobj in scene_groups[scene_group].sprites():
+                    for gameobj in scene_groups[scene_group].sprites():
+                        if (gameobj.type == "DEFAULT"):
                             gameobj.update(keys_pressed, clock)
-                    scene_groups[scene_group].draw(gameDisplay)
+                        elif (gameobj.type == "ENEMY"):
+                            gameobj.update(keys_pressed, clock, collisions)
+                        elif (gameobj.type == "BACKGROUND"):
+                            gameobj.update()
+                            gameobj.draw(gameDisplay)
+                    
+                    if (scene_group != "background"):
+                        scene_groups[scene_group].draw(gameDisplay)
                     
                 spell["position"] = (chicken.rect.x + 50, chicken.rect.y - 80)
                 
@@ -154,35 +177,45 @@ class Game:
                     message["frames"] -= 1
                 else:
                     message["text"] = ""
+                    
+                if spell["text"] in spells and cast == 0:
+                    spell["color"] = [255, 255, 255]
+                    message["text"] = "Cast "+spell["text"]+"!"
+                    message["color"] = (255, 255, 155)
+                    message["frames"] = 30
+                    cast = 20
+                    
+                gameDisplay.blit(bigfont.render(str(hp) + "hp", True, (255,255,255)), (10,10))
+                gameDisplay.blit(bigfont.render("{:.0f}".format(distance) + "m", True, (255,255,255)), (10,90))
+                distance += (Enemy.get_speed()/Enemy.base_speed)/50.0
+                if hp <= 0:
+                    reset = True
+                    
             elif spellbook:
-                gameDisplay.blit(bigfont.render("SPELLBOOK", True, (255, 255, 200)), (580, 20))
+                gameDisplay.blit(bigfont.render("SPELLBOOK", True, (255, 255, 200)), (TEXT_X, 20))
                 
                 line_height = 60
                 line = 1
                 for desc in spells:                
-                    gameDisplay.blit(smallfont.render(desc + " - " + spells[desc], True, (255, 255, 200)), (580, 80+(line_height*line)))
+                    gameDisplay.blit(smallfont.render(desc + " - " + spells[desc], True, (255, 255, 200)), (TEXT_X, 80+(line_height*line)))
                     line += 1
                 
-                
             elif paused:
-                gameDisplay.blit(bigfont.render("PAUSED", True, (255, 255, 155)), (580, 20))
-                gameDisplay.blit(smallfont.render("ESC to resume", True, (255, 255, 155)), (580, 150))
-                gameDisplay.blit(smallfont.render("CTRL-S to save and quit", True, (255, 255, 155)), (580, 280))
+                gameDisplay.blit(bigfont.render("PAUSED", True, (255, 255, 155)), (TEXT_X, 20))
+                gameDisplay.blit(smallfont.render("ESC to resume", True, (255, 255, 155)), (TEXT_X, 150))
+                gameDisplay.blit(smallfont.render("CTRL-S to save and quit", True, (255, 255, 155)), (TEXT_X, 280))
                 
                 
             pygame.display.update()
             clock.tick(60)
-            
-            if spell["text"] in spells and cast == 0:
-                spell["color"] = [255, 255, 255]
-                message["text"] = "Cast "+spell["text"]+"!"
-                message["color"] = (255, 255, 155)
-                message["frames"] = 30
-                cast = 20
-                
-        print("Quitting Time Chicken...")
-        pygame.quit()
-        quit()
 
 if __name__ == '__main__':
-    Game().run()
+
+    game = Game()
+    
+    while not game.closegame:
+        game.run()
+
+    print("Quitting Time Chicken...")
+    pygame.quit()
+    quit()

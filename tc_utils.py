@@ -7,17 +7,18 @@ def makeEnemy(type, image_home):
         }
         badger = Enemy("badger", image_home, {"default":['BigBadger_1.png','BigBadger_2.png']}, badgerControl, (700, 200), (0, 0))
         badger.milliseconds_per_sprite = 100.0
-        badger.physics = False
         return badger
     return None
    
 class TCGameObject(pygame.sprite.Sprite):
         
-    def update(self, keys_pressed, clock):
+    def update(self, keys_pressed=None, clock=None):
         self.doPhysics()
-        self.updateAnimation(clock.get_time())
+        if clock != None:
+            self.updateAnimation(clock.get_time())
         if (self.key_press_responses != None):
-            self.processKeys(keys_pressed)
+            if keys_pressed != None:
+                self.processKeys(keys_pressed)
         self.updatePosition()
         
     def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
@@ -39,7 +40,7 @@ class TCGameObject(pygame.sprite.Sprite):
         self.timeSinceLastFrame = 0
         self.currentFrame = 0
         self.reverse_animation = False
-        self.physics = True
+        self.physics = False
         self.mass = 2
         self.name = name
         self.padding = padding
@@ -137,12 +138,15 @@ class TCGameObject(pygame.sprite.Sprite):
                     deltaList = self.key_press_responses[key]
                     for delta in deltaList:
                         if delta[0] == 'x':
-                            self.x_delta += delta[1]
                             if self.name == "chicken":
-                                Enemy.user_speed_modifier += delta[1] * 0.02
-                                Enemy.user_speed_modifier = 0 if (Enemy.user_speed_modifier < 0) else Enemy.user_speed_modifier
+                                if (self.x_delta + delta[1] > -20.0 and self.x_delta + delta[1] < 530):
+                                    Enemy.user_speed_modifier += delta[1] * 0.02
+                                    Enemy.user_speed_modifier = 0 if (Enemy.user_speed_modifier < 0) else Enemy.user_speed_modifier
+                                    self.x_delta += delta[1]
+                            else:
+                                self.x_delta += delta[1]
                         elif delta[0] == 'x-speed':
-                            self.x_delta += delta[1] * (self.user_speed_modifier + self.base_speed + self.level_speed_modifier)
+                            self.x_delta += delta[1] * Enemy.get_speed()
                         elif delta[0] == 'y':
                             self.y_delta += delta[1]
                         elif delta[0] == 'x-min':
@@ -207,14 +211,51 @@ class TCGameObject(pygame.sprite.Sprite):
             to_ground = self.distToGround()
             self.y_delta += (GRAVITY * self.mass) if (to_ground >= GRAVITY*self.mass) else to_ground
             
+            
 class Enemy(TCGameObject):
     
     base_speed = 3
     user_speed_modifier = 0
     level_speed_modifier = 0
+    
+    def get_speed():
+        return (Enemy.user_speed_modifier + Enemy.base_speed + Enemy.level_speed_modifier)
 
     def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
         TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding)
+        self.type="ENEMY"
         
     def update(self, keys_pressed, clock, collisions):
         TCGameObject.update(self, keys_pressed, clock)
+        
+        
+class Background(TCGameObject):
+            
+    def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
+        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding)
+        self.type="BACKGROUND"
+        self.scrollMultiplier = 1.0
+        
+    def update(self):
+        if self.x_delta <= -self.image.get_width():
+            self.x_delta += self.image.get_width()
+            
+        self.x_delta -= (Enemy.user_speed_modifier + Enemy.level_speed_modifier + 5)*self.scrollMultiplier
+        
+        TCGameObject.update(self)
+    
+    def draw(self, screen):
+        width = self.image.get_width()
+        
+        image_positions = []
+        
+        image_positions.append(self.x_delta)
+        
+        repeat = 1
+        while image_positions[-1] + width < screen.get_width():
+            image_positions.append(self.x_delta + (width*repeat))
+            repeat += 1
+            
+        for position in image_positions:
+            screen.blit(self.image, (position, self.y_delta))
+                    
