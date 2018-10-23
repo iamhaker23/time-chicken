@@ -12,7 +12,7 @@ You are Time Chicken. The Chicken with powers. Time powers.
   - Jump over enemies (SPACEBAR)
   - Type spells to cast (ABCDEFGHIJKLMNOPQRSTUVWXYZ)
   - Check your spell list (TAB)
-  - ~~Pause/Save/Quit (ESC)~~
+  - Pause/Save/Quit (ESC)
 
 # Windows Usage
 In CMD:

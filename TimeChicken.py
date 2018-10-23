@@ -19,8 +19,7 @@ class Game:
         display_height = 720
         gameDisplay = pygame.display.set_mode((display_width,display_height))
         pygame.display.set_caption('Time Chicken from Chicken Coup')
-        black = (60, 84, 145)
-        white = (225,225,225)
+        bg_col = (210, 195, 140)
         self.closegame = False
         reset = False
         clock = pygame.time.Clock()
@@ -29,6 +28,12 @@ class Game:
         TEXT_X = 475
         hp = 100
         distance = 0
+        
+            
+        Enemy.base_speed = 3
+        Enemy.user_speed_modifier = 0
+        Enemy.level_speed_modifier = 0
+        
         ################################# END Game Config
 
         layer1 = pygame.sprite.LayeredUpdates()
@@ -79,6 +84,7 @@ class Game:
         background.add(bg1)
         
         bg2 = Background("clouds", IMAGE_HOME, {"default":["clouds_1.png"]}, None, position=(0, 50))
+        bg2.scrollMultiplier = 0.6
         background.add(bg2)
 
         print("Initialising Time Chicken...")
@@ -120,13 +126,18 @@ class Game:
                         message["frames"] = 30
                     elif not paused and event.key == pygame.K_TAB:
                         spellbook = True
+                        #tint current screen before pause text draws
+                        gameDisplay.fill((0, 75, 40), special_flags=pygame.BLEND_RGBA_MULT)
                     elif event.key == pygame.K_ESCAPE:
                         spellbook = False
                         paused = not paused
                         #tint current screen before pause text draws
                         gameDisplay.fill((0, 40, 75), special_flags=pygame.BLEND_RGBA_MULT)
-                    elif paused and (pygame.key.get_mods() & pygame.KMOD_CTRL) and event.key == pygame.K_s:
-                        self.closegame = True
+                    elif paused:
+                        if (pygame.key.get_mods() & pygame.KMOD_CTRL) and event.key == pygame.K_s:
+                            self.closegame = True
+                        elif event.key == pygame.K_r:
+                            reset = True
                 if event.type == pygame.KEYUP:
                     keys_pressed[str(event.key)] = False
                     if event.key == pygame.K_TAB:
@@ -137,7 +148,7 @@ class Game:
                 enemies.add(makeEnemy("badger", IMAGE_HOME))
             
             if not spellbook and not paused:
-                gameDisplay.fill(black)
+                gameDisplay.fill(bg_col)
                 
                 collisions = pygame.sprite.spritecollide(chicken, enemies, False, pygame.sprite.collide_circle_ratio(0.5))
                 hp -= len(collisions)
@@ -204,6 +215,7 @@ class Game:
                 gameDisplay.blit(bigfont.render("PAUSED", True, (255, 255, 155)), (TEXT_X, 20))
                 gameDisplay.blit(smallfont.render("ESC to resume", True, (255, 255, 155)), (TEXT_X, 150))
                 gameDisplay.blit(smallfont.render("CTRL-S to save and quit", True, (255, 255, 155)), (TEXT_X, 280))
+                gameDisplay.blit(smallfont.render("R to restart", True, (255, 255, 155)), (TEXT_X, 410))
                 
                 
             pygame.display.update()
