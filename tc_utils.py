@@ -1,22 +1,30 @@
 import pygame
 
-def doGameLoopAndRender(scene, surface, clock, keys_pressed):
-    for gameobj in scene.sprites():
-        gameobj.doPhysics()
-        gameobj.updateAnimation(clock.get_time())
-        if (gameobj.key_press_responses != None):
-            gameobj.processKeys(keys_pressed)
-        #gameobj.updateRect()
-        gameobj.updatePosition()
-        
-    scene.draw(surface)
-
+def makeEnemy(type, image_home):
+    if type == "badger":
+        badgerControl = {
+            "ALWAYS":[('x-speed', -1.0), ('x-min', -200)]
+        }
+        badger = Enemy("badger", image_home, {"default":['BigBadger_1.png','BigBadger_2.png']}, badgerControl, (700, 200), (0, 0))
+        badger.milliseconds_per_sprite = 100.0
+        badger.physics = False
+        return badger
+    return None
+   
 class TCGameObject(pygame.sprite.Sprite):
+        
+    def update(self, keys_pressed, clock):
+        self.doPhysics()
+        self.updateAnimation(clock.get_time())
+        if (self.key_press_responses != None):
+            self.processKeys(keys_pressed)
+        self.updatePosition()
         
     def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
         pygame.sprite.Sprite.__init__(self)
         
         ######## START INSTANCE VARIABLES
+        self.type="DEFAULT"
         self.parent = None
         self.slowParentDelay = 0
         self.slowParentAccum = [0,0]
@@ -48,9 +56,8 @@ class TCGameObject(pygame.sprite.Sprite):
             for image in animation_images:
                 self.animations[animation_name].append(pygame.image.load(image_home + image))
         
-        #TODO: animation list
-        FPS = 15.0
-        self.milliseconds_per_sprite = 1000.0/FPS
+        fps = 15.0
+        self.milliseconds_per_sprite = 1000.0/fps
         #hack to force first frame
         self.image = None
         self.updateAnimation(self.milliseconds_per_sprite)
@@ -64,6 +71,7 @@ class TCGameObject(pygame.sprite.Sprite):
                     
     #Add this draw function so we can draw individual sprites
     def updatePosition(self):
+        
         newPosition = [self.x_delta, self.y_delta]
         if (self.parent != None):
             if (self.slowParentDelay != 0):
@@ -130,8 +138,16 @@ class TCGameObject(pygame.sprite.Sprite):
                     for delta in deltaList:
                         if delta[0] == 'x':
                             self.x_delta += delta[1]
+                            if self.name == "chicken":
+                                Enemy.user_speed_modifier += delta[1] * 0.02
+                                Enemy.user_speed_modifier = 0 if (Enemy.user_speed_modifier < 0) else Enemy.user_speed_modifier
+                        elif delta[0] == 'x-speed':
+                            self.x_delta += delta[1] * (self.user_speed_modifier + self.base_speed + self.level_speed_modifier)
                         elif delta[0] == 'y':
                             self.y_delta += delta[1]
+                        elif delta[0] == 'x-min':
+                            if self.rect.x <= delta[1]:
+                                self.kill()
                         elif delta[0] == 'frames-to-jump':
                             if self.jump == 0 and self.canJump:
                                 self.jump = delta[1]
@@ -190,3 +206,15 @@ class TCGameObject(pygame.sprite.Sprite):
         elif (not onGround):
             to_ground = self.distToGround()
             self.y_delta += (GRAVITY * self.mass) if (to_ground >= GRAVITY*self.mass) else to_ground
+            
+class Enemy(TCGameObject):
+    
+    base_speed = 3
+    user_speed_modifier = 0
+    level_speed_modifier = 0
+
+    def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
+        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding)
+        
+    def update(self, keys_pressed, clock, collisions):
+        TCGameObject.update(self, keys_pressed, clock)
