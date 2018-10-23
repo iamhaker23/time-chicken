@@ -1,5 +1,5 @@
 import pygame
-from tc_utils import TCGameObject
+from tc_utils import doGameLoopAndRender, TCGameObject
 
 pygame.init()
 pygame.font.init()
@@ -26,9 +26,12 @@ layer2 = pygame.sprite.LayeredUpdates()
 scene_groups = [layer1, layer2]
 
 chickenControls = {
-    "ALWAYS":[('x', 1), ('walk', True)]
+    "ALWAYS":[('walk', True)]
+    ,str(pygame.K_RIGHT):[('x', 1)]
+    ,str(pygame.K_LEFT):[('x', -1)]
     ,str(pygame.K_SPACE):[('walk', False), ('frames-to-jump', 15)]
 }
+
 chickenAnims = {
     "walk" : ['chicken1.png', 'chicken2.png', 'chicken3.png', 'chicken4.png', 'chicken5.png']
     ,"default" : ['chicken.png']
@@ -39,14 +42,27 @@ chicken = TCGameObject("chicken", IMAGE_HOME, chickenAnims, chickenControls, (80
 eggAnims = {
     "default" : ['Egg_1.png', 'Egg_2.png', 'Egg_3.png', 'Egg_4.png', 'Egg_5.png', 'Egg_6.png', 'Egg_7.png', 'Egg_8.png' ]
 }
-egg = TCGameObject("egg", IMAGE_HOME, eggAnims, None, padding=(0, 10))
+
+eggControls = {
+    "ALWAYS":[('frames-to-jump', chicken.jump)]
+}
+
+egg = TCGameObject("egg", IMAGE_HOME, eggAnims, eggControls, (-40, 27), (0, 0))
+
+egg.slowParentDelay = 10
+egg.parent = chicken
+egg.physics = False
 
 layer1.add(chicken)
 layer2.add(egg)
 
 print("Initialising Time Chicken...")
 
-spell = ""
+spell = {"color":[255, 255, 255], "text":"", "position":(0,0)}
+cast = 0
+
+spells = ["toot"]
+message = {"text":"", "color": (255, 255, 255), "frames":0, "position":(0,0)}
 
 while not closegame:
     for event in pygame.event.get():
@@ -57,32 +73,54 @@ while not closegame:
                 
         if event.type == pygame.KEYDOWN:
             keys_pressed[str(event.key)] = True
-            if (pygame.K_a <= event.key and pygame.K_z >= event.key):
-                spell += pygame.key.name(event.key)
-            #TODO REMOVE SPACE AS TEXT
-            if (pygame.K_SPACE == event.key):
-                spell += " "
+            if pygame.K_a <= event.key and pygame.K_z >= event.key and cast == 0:
+                spell["text"] += pygame.key.name(event.key)
+            elif pygame.K_RETURN == event.key and message["text"] == "" and spell["text"] != "" and cast == 0:
+                spell["text"] = ""
+                message["text"] = "CANCEL!"
+                message["color"] = (255, 155, 155)
+                message["frames"] = 30
         if event.type == pygame.KEYUP:
             keys_pressed[str(event.key)] = False
         ######################        
     
+    
     gameDisplay.fill(black)
     for scene in scene_groups:
-        for gameobj in scene.sprites():
-            gameobj.doPhysics()
-            gameobj.updateAnimation(clock.get_time())
-            if (gameobj.key_press_responses != None):
-                gameobj.processKeys(keys_pressed)
-            #gameobj.updateRect()
-            gameobj.updatePosition()
-            
-        scene.draw(gameDisplay)
+        doGameLoopAndRender(scene, gameDisplay, clock, keys_pressed)
         
-    gameDisplay.blit(myfont.render(spell, True, (255, 255, 255)), (0,0))
+    spell["position"] = (chicken.rect.x + 50, chicken.rect.y - 80)
+    
+    gameDisplay.blit(myfont.render(spell["text"], True, tuple(spell["color"])), spell["position"])
+    print(cast)
+    if cast > 0:
+        cast -= 1
+        spell["color"][0] -= 2
+        spell["color"][1] -= 5
+        spell["color"][2] -= 10
+        if cast == 0:
+            spell["text"] = ""
+    
+    if message["text"] != "" and message["frames"] > 0:
+        if (message["text"] == "CANCEL!"):
+            message["position"] = spell["position"]
+        else:
+            message["position"] = (spell["position"][0], spell["position"][1] - 60)
+        gameDisplay.blit(myfont.render(message["text"], True, message["color"]), message["position"])
+        message["frames"] -= 1
+    else:
+        message["text"] = ""
     
     pygame.display.update()
     clock.tick(60)
-
+    
+    if spell["text"] in spells and cast == 0:
+        spell["color"] = [255, 255, 255]
+        message["text"] = "Cast "+spell["text"]+"!"
+        message["color"] = (255, 255, 155)
+        message["frames"] = 30
+        cast = 20
+        
 print("Quitting Time Chicken...")
 pygame.quit()
 quit()

@@ -1,13 +1,31 @@
 import pygame
+
+def doGameLoopAndRender(scene, surface, clock, keys_pressed):
+    for gameobj in scene.sprites():
+        gameobj.doPhysics()
+        gameobj.updateAnimation(clock.get_time())
+        if (gameobj.key_press_responses != None):
+            gameobj.processKeys(keys_pressed)
+        #gameobj.updateRect()
+        gameobj.updatePosition()
+        
+    scene.draw(surface)
+
 class TCGameObject(pygame.sprite.Sprite):
         
     def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
         pygame.sprite.Sprite.__init__(self)
         
         ######## START INSTANCE VARIABLES
+        self.parent = None
+        self.slowParentDelay = 0
+        self.slowParentAccum = [0,0]
+        
         self.x_delta = position[0]
         self.y_delta = position[1]
+        
         self.jump = 0
+        self.ground_level = 650
         self.canJump = False
             
         self.timeSinceLastFrame = 0
@@ -43,11 +61,33 @@ class TCGameObject(pygame.sprite.Sprite):
             self.image.fill((255,0,0))
         
         self.key_press_responses = key_press_responses
-        
+                    
     #Add this draw function so we can draw individual sprites
     def updatePosition(self):
-        self.rect = self.rect.move(self.x_delta, self.y_delta)
+        newPosition = [self.x_delta, self.y_delta]
+        if (self.parent != None):
+            if (self.slowParentDelay != 0):
+                slowParentFactor = float(self.slowParentDelay)/100.0
                 
+                xDiffSigned = float(self.slowParentAccum[0] - self.parent.x_delta)
+                yDiffSigned = float(self.slowParentAccum[1] - self.parent.y_delta)
+                
+                slowParentIncrement = [slowParentFactor*xDiffSigned, slowParentFactor*yDiffSigned]
+                
+                if (abs(xDiffSigned) >= abs(slowParentIncrement[0])):
+                    self.slowParentAccum[0] -= slowParentIncrement[0]
+                
+                if (abs(yDiffSigned) >= abs(slowParentIncrement[1])):
+                    self.slowParentAccum[1] -= slowParentIncrement[1]
+                
+                newPosition[0] += self.slowParentAccum[0]
+                newPosition[1] += self.slowParentAccum[1]
+            else:
+                newPosition[0] += self.parent.x_delta
+                newPosition[1] += self.parent.y_delta
+        self.rect = self.rect.move(newPosition[0], newPosition[1])
+        
+            
     def updateAnimation(self, timePassedLastFrame):
         active_animation_name = None
         
@@ -129,7 +169,7 @@ class TCGameObject(pygame.sprite.Sprite):
         
     def distToGround(self):
         pos = self.rect.midbottom[1] - (self.rect.height/2) + (self.padding[1])
-        return 650 - pos
+        return self.ground_level - pos
         
     def doPhysics(self):
         #TODO: generate collision force list
