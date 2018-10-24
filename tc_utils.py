@@ -18,6 +18,12 @@ def makeEnemy(type, image_home):
         fox.milliseconds_per_sprite = 200.0
         return fox
     return None
+    
+def makeEffect(type, image_home, parent):
+    if type == "spell":
+        effect = Effect("effect", image_home, {"default":['test-spell.png']}, parent=parent)
+        return effect
+    return None
    
 class TCGameObject(pygame.sprite.Sprite):
         
@@ -30,12 +36,12 @@ class TCGameObject(pygame.sprite.Sprite):
                 self.processKeys(keys_pressed)
         self.updatePosition()
         
-    def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
+    def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
         pygame.sprite.Sprite.__init__(self)
         
         ######## START INSTANCE VARIABLES
         self.type="DEFAULT"
-        self.parent = None
+        self.parent = parent
         self.slowParentDelay = 0
         self.slowParentAccum = [0,0]
         self.slowParentInit = False
@@ -60,12 +66,7 @@ class TCGameObject(pygame.sprite.Sprite):
         ##############
         
         #generate sprite list
-        for animation_name in animation_config:
-            animation_images = animation_config[animation_name]
-            self.animations[animation_name] = []
-            self.animation_activators[animation_name] = []
-            for image in animation_images:
-                self.animations[animation_name].append(pygame.image.load(image_home + image))
+        self.setAnimations(animation_config, image_home)
         
         fps = 15.0
         self.milliseconds_per_sprite = 1000.0/fps
@@ -80,10 +81,21 @@ class TCGameObject(pygame.sprite.Sprite):
         
         self.key_press_responses = key_press_responses
                     
+    def setAnimations(self, conf, image_home, update=False):
+        for animation_name in conf:
+            animation_images = conf[animation_name]
+            self.animations[animation_name] = []
+            self.animation_activators[animation_name] = []
+            for image in animation_images:
+                self.animations[animation_name].append(pygame.image.load(image_home + image))
+        if (update):
+            self.updateAnimation(self.milliseconds_per_sprite)
+                    
     #Add this draw function so we can draw individual sprites
     def updatePosition(self):
         
         newPosition = [self.x_delta, self.y_delta]
+                
         if (self.parent != None):
             if (self.slowParentDelay != 0):
                 if not self.slowParentInit:
@@ -223,11 +235,33 @@ class TCGameObject(pygame.sprite.Sprite):
         
         if (self.jump > 0):
             self.jump -= 1
-            self.y_delta += -5 if (self.jump < 5) else -10
+            self.y_delta += -10 if (self.jump < 5) else -15
         elif (not onGround):
             to_ground = self.distToGround()
             self.y_delta += (GRAVITY * self.mass) if (to_ground >= GRAVITY*self.mass) else to_ground
+
             
+class Effect(TCGameObject):
+    def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
+        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding, parent)
+        self.type="EFFECT"
+        #self.image = pygame.transform.scale(self.image, (20, 20))
+        self.age = 0
+        self.radius = 1
+        self.life = 400
+        
+    def update(self, keys_pressed, clock):
+        TCGameObject.update(self, keys_pressed, clock)
+        
+        self.image = pygame.transform.smoothscale(self.image, (self.age * self.radius, self.age * self.radius))
+        #self.rect = self.rect.move(-self.rect.width/2, -self.rect.height/2)
+
+        self.rect.center = self.parent.rect.center
+
+        if self.age < self.life:
+            self.age += clock.get_time()
+        else:
+            self.kill()
             
 class Enemy(TCGameObject):
     
@@ -239,8 +273,8 @@ class Enemy(TCGameObject):
     def get_speed(base_increase=0):
         return 0 if Enemy.disable_scrolling else (Enemy.user_speed_modifier + Enemy.base_speed + base_increase + Enemy.level_speed_modifier)
 
-    def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
-        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding)
+    def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
+        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding, parent)
         self.type="ENEMY"
         
     def update(self, keys_pressed, clock, collisions):
@@ -249,25 +283,15 @@ class Enemy(TCGameObject):
         
 class Background(TCGameObject):
             
-    def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
-        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding)
+    def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
+        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding, parent)
         self.type="BACKGROUND"
         self.scrollMultiplier = 1.0
+        
         self.randomFactor = False
+        self.wrap = 0
+        self.skips = []
         
-        self.ignore = []
-        self.refreshIgnore()
-        
-    def refreshIgnore(self):
-        if (len(self.ignore) == 0):
-            for x in range(0, 10):
-                if bool(random.getrandbits(1)):
-                    self.ignore.append(x)
-        else:
-            for x in range(0, len(self.ignore)):
-                self.ignore[x] -= 1
-                if (self.ignore[x] < 0):
-                    self.ignore[x] += 10
                 
     def update(self):
         if self.x_delta <= -self.image.get_width():
@@ -283,30 +307,44 @@ class Background(TCGameObject):
     def draw(self, screen):
         width = self.image.get_width()
         
+        #Dear Reader
+        #Do not try to understand this algorithm
+        #I've horribly hacked the original repeat-blits-for-x-tiling algo to allow for scrolling gaps
+        #It depends on:
+        # - self.wrap
+        # - self.skips
+        # - self.randomFactor
+        # - tiles_per_screen
+        
         image_positions = []
-        positions_to_ignore = []
-        
-        image_positions.append(self.x_delta)
-        
-        if (0 in self.ignore):
-            positions_to_ignore.append(self.x_delta)
-                    
+        if not self.randomFactor or not 0 in self.skips:
+            image_positions.append(self.x_delta)
+                
+        tiles_per_screen = int(math.floor((screen.get_width()/width)))
+            
         repeat = 1
-        while image_positions[-1] + width < screen.get_width():
-            image_positions.append(self.x_delta + (width*repeat))
-            if (repeat in self.ignore):
-                positions_to_ignore.append(self.x_delta + (width*repeat))
+        while (image_positions[-1] if len(image_positions) > 0 else 0) + width < screen.get_width():
+            if not self.randomFactor or not (repeat) in self.skips:
+                image_positions.append(self.x_delta + (width*repeat))
             repeat += 1
         
-        #TODO
-        #get an if statement to say if the image_positions list has "bumped"
-        #only decrement tile index when tile has moved down in image_positions
-        if (width%self.get_scroll()) == width%self.x_delta:
-            self.refreshIgnore()
-   
-        index = 0
         for position in image_positions:
-            if not self.randomFactor or (not position in positions_to_ignore):
-                screen.blit(self.image, (position, self.y_delta))
-            index += 1
+            screen.blit(self.image, (position, self.y_delta))
         
+        if self.randomFactor and abs(self.x_delta) >= width:
+            self.wrap += 1
+            self.wrap %= tiles_per_screen
+            
+            removeGaps = []
+            
+            for x in range(0, len(self.skips)):
+                if self.skips[x]-1 < 0:
+                    removeGaps.append(self.skips[x])
+                else:
+                    self.skips[x] -= 1
+            
+            for negative in removeGaps:
+                self.skips.remove(negative)
+            
+            if len(self.skips) < 2 and bool(random.getrandbits(1)):
+                self.skips.append(tiles_per_screen+1)

@@ -1,6 +1,6 @@
 import pygame
 import random
-from tc_utils import TCGameObject, Background, Enemy, makeEnemy
+from tc_utils import TCGameObject, Background, Enemy, makeEnemy, makeEffect
 
 class Game:
     
@@ -21,7 +21,7 @@ class Game:
         display_height = 720
         gameDisplay = pygame.display.set_mode((display_width,display_height))
         pygame.display.set_caption('Time Chicken from Chicken Coup')
-        bg_col = (210, 195, 140)
+        bg_col = (200, 170, 120)
         self.closegame = False
         reset = False
         clock = pygame.time.Clock()
@@ -47,6 +47,7 @@ class Game:
 
         layer1 = pygame.sprite.LayeredUpdates()
         layer2 = pygame.sprite.LayeredUpdates()
+        layer3 = pygame.sprite.LayeredUpdates()
         enemies = pygame.sprite.LayeredUpdates()
         background = pygame.sprite.LayeredUpdates()
         
@@ -55,13 +56,14 @@ class Game:
             ,"enemies": enemies
             ,"player": layer1
             ,"foreground" : layer2
+            ,"effects" : layer3
         }
 
         chickenControls = {
             "ALWAYS":[('walk', True)]
             ,str(pygame.K_RIGHT):[('x', 5)]
             ,str(pygame.K_LEFT):[('x', -5)]
-            ,str(pygame.K_SPACE):[('walk', False), ('frames-to-jump', 20)]
+            ,str(pygame.K_SPACE):[('walk', False), ('frames-to-jump', 15)]
         }
 
         chickenAnims = {
@@ -86,24 +88,30 @@ class Game:
         egg.slowParentDelay = 10
         egg.parent = chicken
 
-
         layer1.add(chicken)
         layer2.add(egg)
         
-        trees = Background("trees", IMAGE_HOME, {"default":["tree1.png"]}, None, position=(0, 480))
+        
+        clouds = Background("clouds", IMAGE_HOME, {"default":["clouds_1.png"]}, None, position=(0, 50))
+        clouds.scrollMultiplier = 0.2
+        background.add(clouds)
+        
+        
+        mountains = Background("mountains", IMAGE_HOME, {"default":["mountains.png"]}, None, position=(0, 450))
+        mountains.scrollMultiplier = 0.5
+        background.add(mountains)
+        
+        trees = Background("trees", IMAGE_HOME, {"default":["Oak.png"]}, None, position=(0, 375))
         trees.scrollMultiplier = 0.8
         trees.randomFactor = True
         background.add(trees)
         
-        bg1 = Background("grass", IMAGE_HOME, {"default":["grass_1.png"]}, None, position=(0, 610))
-        background.add(bg1)
-        
-        bg2 = Background("clouds", IMAGE_HOME, {"default":["clouds_1.png"]}, None, position=(0, 50))
-        bg2.scrollMultiplier = 0.6
-        background.add(bg2)
+        grass = Background("grass", IMAGE_HOME, {"default":["grass_1.png"]}, None, position=(0, 550))
+        background.add(grass)
         
         
-        house = TCGameObject("clouds", IMAGE_HOME, {"default":["house.png"]},{"ALWAYS":[('x-speed', -1.0), ('x-min', -200)]}, position=(0, 0))
+        
+        house = TCGameObject("house", IMAGE_HOME, {"default":["house.png"]},{"ALWAYS":[('x-speed', -1.0), ('x-min', -200)]}, position=(0, 0))
         enemies.add(house)
 
         print(self.game_state + " Time Chicken...")
@@ -141,7 +149,7 @@ class Game:
                     elif not paused and not spellbook and pygame.K_BACKSPACE == event.key and message["text"] == "" and spell["text"] != "" and cast == 0:
                         spell["text"] = ""
                         message["text"] = "CANCEL!"
-                        message["color"] = (255, 155, 155)
+                        message["color"] = (255, 20, 20)
                         message["frames"] = 30
                     elif not paused and event.key == pygame.K_TAB:
                         spellbook = True
@@ -153,7 +161,7 @@ class Game:
                         #tint current screen before pause text draws
                         gameDisplay.fill((0, 40, 75), special_flags=pygame.BLEND_RGBA_MULT)
                     elif paused:
-                        if (pygame.key.get_mods() & pygame.KMOD_CTRL) and event.key == pygame.K_s:
+                        if (pygame.key.get_mods() & pygame.KMOD_CTRL) and event.key == pygame.K_x:
                             self.closegame = True
                         elif event.key == pygame.K_r:
                             reset = True
@@ -197,23 +205,26 @@ class Game:
                     doing_bossfight = False
                     bossfight_wins += 1
                     #next boss is further away
-                    distance_to_next_bossfight += 50
+                    distance_to_next_bossfight += 10
                     enemies.remove(enemies.sprites())
                     #rotate colors/randomise bg layers after win
                     r = (bg_col[0] + 175) % 255
                     g = (bg_col[0] + 175) % 255
                     b = (bg_col[0] + 175) % 255
                     bg_col = (r,g,b)
+                    tree_images = ["Oak.png", "Lime.png", "Pine.png", "NotPine.png"]
+                    print(tree_images[bossfight_wins%len(tree_images)])
+                    print(bossfight_wins%len(tree_images))
+                    trees.setAnimations({"default":[tree_images[bossfight_wins%len(tree_images)]]}, IMAGE_HOME, True)
         
             if not spellbook and not paused:
                 gameDisplay.fill(bg_col)
                 
-                collisions = pygame.sprite.spritecollide(chicken, enemies, False, pygame.sprite.collide_circle_ratio(0.5))
-                hp -= len(collisions)
-                
                 for scene_group in scene_groups:
                     for gameobj in scene_groups[scene_group].sprites():
                         if (gameobj.type == "DEFAULT"):
+                            gameobj.update(keys_pressed, clock)
+                        elif (gameobj.type == "EFFECT"):
                             gameobj.update(keys_pressed, clock)
                         elif (gameobj.type == "ENEMY"):
                             gameobj.update(keys_pressed, clock, collisions)
@@ -223,7 +234,10 @@ class Game:
                     
                     if (scene_group != "background"):
                         scene_groups[scene_group].draw(gameDisplay)
-                    
+                
+                collisions = pygame.sprite.spritecollide(chicken, enemies, False, pygame.sprite.collide_circle_ratio(0.5))
+                hp -= len(collisions)
+                
                 spell["position"] = (chicken.rect.x + 50, chicken.rect.y - 80)
                 
                 gameDisplay.blit(bigfont.render(spell["text"], True, tuple(spell["color"])), spell["position"])
@@ -248,14 +262,25 @@ class Game:
                     message["text"] = ""
                     
                 if spell["text"] in spells and cast == 0:
+                    
+                    effect = makeEffect("spell", IMAGE_HOME, chicken)
+                    layer3.add(effect)
+                    
                     spell["color"] = [255, 255, 255]
                     message["text"] = "Cast "+spell["text"]+"!"
                     message["color"] = (255, 255, 155)
                     message["frames"] = 30
                     cast = 20
-                    
-                gameDisplay.blit(bigfont.render(str(hp) + "hp", True, (255,255,255)), (10,10))
-                gameDisplay.blit(bigfont.render("{:.0f}".format(distance) + "m", True, (255,255,255)), (10,90))
+                
+                gameDisplay.blit(smallfont.render("FPS:" + "{:.2f}".format(clock.get_fps()), True, (255, 255, 155)), (1000, 10))
+                
+                gameDisplay.fill((200, 25, 25), pygame.Rect(5, 90, (300*(hp/100) if hp > 0 else 1), 20))#,special_flags=pygame.BLEND_RGBA_MULT)
+                gameDisplay.blit(bigfont.render(str(hp) + "hp", True, (255,255,255)), (10,95))
+                
+                progress_to_bossfight = (distance-distance_at_last_bossfight)/distance_to_next_bossfight
+                gameDisplay.fill((25, 25, 200), pygame.Rect(5, 5, (1270*(progress_to_bossfight) if progress_to_bossfight > 0 else 1), 5))#,special_flags=pygame.BLEND_RGBA_MULT)
+                gameDisplay.blit(bigfont.render("{:.0f}".format(distance) + "m", True, (255,255,255)), (10,0))
+                
                 distance += (Enemy.get_speed()/Enemy.base_speed)/50.0
                 if hp <= 0:
                     reset = True
@@ -272,8 +297,9 @@ class Game:
             elif paused:
                 gameDisplay.blit(bigfont.render("PAUSED", True, (255, 255, 155)), (TEXT_X, 20))
                 gameDisplay.blit(smallfont.render("ESC to resume", True, (255, 255, 155)), (TEXT_X, 150))
-                gameDisplay.blit(smallfont.render("CTRL-S to save and quit", True, (255, 255, 155)), (TEXT_X, 280))
+                gameDisplay.blit(smallfont.render("CTRL-X to quit", True, (255, 255, 155)), (TEXT_X, 280))
                 gameDisplay.blit(smallfont.render("R to restart", True, (255, 255, 155)), (TEXT_X, 410))
+                
                 
                 
             pygame.display.update()
