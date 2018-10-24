@@ -54,8 +54,8 @@ class Game:
         scene_groups = {
             "background": background
             ,"enemies": enemies
+            ,"props" : layer2
             ,"player": layer1
-            ,"foreground" : layer2
             ,"effects" : layer3
         }
 
@@ -75,6 +75,14 @@ class Game:
         chicken.physics = True
         chicken.mass = 1
         
+        layer1.add(chicken)
+        
+        
+        house = TCGameObject("house", IMAGE_HOME, {"default":["house.png"]},{"ALWAYS":[('x-speed', -0.9), ('x-min', -500)]}, position=(0, 57))
+        rock = TCGameObject("rock", IMAGE_HOME, {"default":["rock.png"]},{"ALWAYS":[('x-speed', -0.9), ('x-min', -500)]}, position=(100, 270))
+        layer2.add(house)
+        layer3.add(rock)
+               
         eggAnims = {
             "default" : ['Egg_1.png', 'Egg_2.png', 'Egg_3.png', 'Egg_4.png', 'Egg_5.png', 'Egg_6.png', 'Egg_7.png', 'Egg_8.png' ]
         }
@@ -88,8 +96,8 @@ class Game:
         egg.slowParentDelay = 10
         egg.parent = chicken
 
-        layer1.add(chicken)
-        layer2.add(egg)
+        
+        layer1.add(egg)
         
         
         clouds = Background("clouds", IMAGE_HOME, {"default":["clouds_1.png"]}, None, position=(0, 50))
@@ -108,16 +116,14 @@ class Game:
         
         grass = Background("grass", IMAGE_HOME, {"default":["grass_1.png"]}, None, position=(0, 550))
         background.add(grass)
-        
-        
-        
-        house = TCGameObject("house", IMAGE_HOME, {"default":["house.png"]},{"ALWAYS":[('x-speed', -1.0), ('x-min', -200)]}, position=(0, 0))
-        enemies.add(house)
 
+        
+        
         print(self.game_state + " Time Chicken...")
 
         spell = {"color":[255, 255, 255], "text":"", "position":(0,0)}
         cast = 0
+        lastSpell = ""
 
         spells = {
             "toot":"gets them everytime"
@@ -144,7 +150,7 @@ class Game:
                 if event.type == pygame.KEYDOWN:
                     keys_pressed[str(event.key)] = True
                     #allow typing even when cancelled for more seamless gameplay
-                    if not paused and not spellbook and pygame.K_a <= event.key and pygame.K_z >= event.key and cast == 0: #and message["frames"] == 0:
+                    if not paused and not spellbook and pygame.K_a <= event.key and pygame.K_z >= event.key:
                         spell["text"] += pygame.key.name(event.key)
                     elif not paused and not spellbook and pygame.K_BACKSPACE == event.key and message["text"] == "" and spell["text"] != "" and cast == 0:
                         spell["text"] = ""
@@ -175,7 +181,7 @@ class Game:
             current_ticks = pygame.time.get_ticks()
             random_delay = random.uniform(0.0, 1000.0)
             
-            #if yopu are at (or a bit past) the next bossfight
+            #if you are at (or a bit past) the next bossfight
             if distance - (distance_at_last_bossfight + distance_to_next_bossfight) >= 0:
                 doing_bossfight = True
                 Enemy.disable_scrolling = True
@@ -198,9 +204,8 @@ class Game:
                     enemies.remove(enemies.sprites())
                     enemies.add(makeEnemy("fox", IMAGE_HOME))
                 
-                #Continue only after defeating boss
-                #Temporarily, toot is the win condition
-                if (spell["text"] == "toot"):
+                if enemies.sprites()[0].hp == 1:
+                    #Continue only after defeating boss
                     Enemy.disable_scrolling = False
                     doing_bossfight = False
                     bossfight_wins += 1
@@ -227,16 +232,20 @@ class Game:
                         elif (gameobj.type == "EFFECT"):
                             gameobj.update(keys_pressed, clock)
                         elif (gameobj.type == "ENEMY"):
-                            gameobj.update(keys_pressed, clock, collisions)
+                            gameobj.update(keys_pressed, clock)
                         elif (gameobj.type == "BACKGROUND"):
                             gameobj.update()
                             gameobj.draw(gameDisplay)
                     
                     if (scene_group != "background"):
                         scene_groups[scene_group].draw(gameDisplay)
-                
+
+                #lose hp for touching enemies
                 collisions = pygame.sprite.spritecollide(chicken, enemies, False, pygame.sprite.collide_circle_ratio(0.5))
                 hp -= len(collisions)
+                
+                for enemy in enemies.sprites():
+                    enemy.checkHits(layer3)
                 
                 spell["position"] = (chicken.rect.x + 50, chicken.rect.y - 80)
                 
@@ -248,7 +257,7 @@ class Game:
                     spell["color"][1] -= 5
                     spell["color"][2] -= 10
                     if cast == 0:
-                        spell["text"] = ""
+                        #spell["text"] = ""
                         spell["color"] = [255, 255, 255]
                 
                 if message["text"] != "" and message["frames"] > 0:
@@ -263,23 +272,43 @@ class Game:
                     
                 if spell["text"] in spells and cast == 0:
                     
-                    effect = makeEffect("spell", IMAGE_HOME, chicken)
-                    layer3.add(effect)
+                    spellsList = list(spells.keys())
+                    if spell["text"] == spellsList[0]:
+                        if (hp <= 195):
+                            hp += 5
+                            layer3.add(makeEffect("heal-spell", IMAGE_HOME, chicken))
+                    elif spell["text"] == spellsList[1]:
+                        if not doing_bossfight:
+                            for sprite in enemies.sprites():
+                                if (sprite.x_delta >= chicken.x_delta):
+                                    sprite.x_delta = chicken.x_delta - 100
+                    elif spell["text"] == spellsList[2]:
+                        layer3.add(makeEffect("shoot-spell", IMAGE_HOME, chicken))
+                    
                     
                     spell["color"] = [255, 255, 255]
-                    message["text"] = "Cast "+spell["text"]+"!"
+                    
+                    lastSpell = spell["text"]
+                    spell["text"] = ""
+                    message["text"] = "Cast "+lastSpell+"!"
+                    
                     message["color"] = (255, 255, 155)
                     message["frames"] = 30
                     cast = 20
                 
-                gameDisplay.blit(smallfont.render("FPS:" + "{:.2f}".format(clock.get_fps()), True, (255, 255, 155)), (1000, 10))
+                iconImg = "icon1.png" if (hp >= 30) else "icon2.png"
+                gameDisplay.blit(pygame.image.load(IMAGE_HOME + iconImg), (0, 10))
                 
-                gameDisplay.fill((200, 25, 25), pygame.Rect(5, 90, (300*(hp/100) if hp > 0 else 1), 20))#,special_flags=pygame.BLEND_RGBA_MULT)
-                gameDisplay.blit(bigfont.render(str(hp) + "hp", True, (255,255,255)), (10,95))
+                gameDisplay.blit(smallfont.render("FPS:" + "{:.2f}".format(clock.get_fps()), True, (255, 255, 155)), (1100, 10))
+                
+                uiXPadding = 200
+                
+                gameDisplay.fill((200, 25, 25), pygame.Rect(uiXPadding, 90, (300*(hp/100) if hp > 0 else 1), 20))#,special_flags=pygame.BLEND_RGBA_MULT)
+                gameDisplay.blit(bigfont.render(str(hp) + "hp", True, (255,255,255)), (uiXPadding,95))
                 
                 progress_to_bossfight = (distance-distance_at_last_bossfight)/distance_to_next_bossfight
-                gameDisplay.fill((25, 25, 200), pygame.Rect(5, 5, (1270*(progress_to_bossfight) if progress_to_bossfight > 0 else 1), 5))#,special_flags=pygame.BLEND_RGBA_MULT)
-                gameDisplay.blit(bigfont.render("{:.0f}".format(distance) + "m", True, (255,255,255)), (10,0))
+                gameDisplay.fill((25, 25, 200), pygame.Rect(uiXPadding, 5, (1000*(progress_to_bossfight) if progress_to_bossfight > 0 else 1), 5))#,special_flags=pygame.BLEND_RGBA_MULT)
+                gameDisplay.blit(bigfont.render("{:.0f}".format(distance) + "m", True, (255,255,255)), (uiXPadding,0))
                 
                 distance += (Enemy.get_speed()/Enemy.base_speed)/50.0
                 if hp <= 0:

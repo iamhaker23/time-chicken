@@ -12,16 +12,20 @@ def makeEnemy(type, image_home):
         return badger
     elif type == "fox":
         foxControl = {
-            "ALWAYS":[('x', -1.0), ('x-min', -200)]
+            "ALWAYS":[('x', -1.0), ('x-min-reverse', 400), ('x-max-reverse', 611)]
         }
-        fox = Enemy("fox", image_home, {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (700, 100), (0, 0))
+        fox = Enemy("fox", image_home, {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (610, 100), (0, 0))
         fox.milliseconds_per_sprite = 200.0
         return fox
     return None
     
 def makeEffect(type, image_home, parent):
-    if type == "spell":
-        effect = Effect("effect", image_home, {"default":['test-spell.png']}, parent=parent)
+    if type == "heal-spell":
+        effect = Effect("heal-spell", image_home, {"default":['spell1.png']}, parent=parent)
+        return effect
+    elif type == "shoot-spell":
+        effect = Effect("shoot-spell", image_home, {"default":['spell2.png']}, {"ALWAYS":[('x',5)]}, position=(parent.x_delta, parent.y_delta))
+        effect.life = 600
         return effect
     return None
    
@@ -173,7 +177,7 @@ class TCGameObject(pygame.sprite.Sprite):
                                     Enemy.user_speed_modifier = 0 if (Enemy.user_speed_modifier < 0) else Enemy.user_speed_modifier
                                     self.x_delta += delta[1]
                             else:
-                                self.x_delta += delta[1]
+                                self.x_delta += delta[1] * (1 if self.type != "ENEMY" else self.scroll_direction)
                         elif delta[0] == 'x-speed':
                             self.x_delta += delta[1] * Enemy.get_speed()
                         elif delta[0] == 'y':
@@ -181,6 +185,12 @@ class TCGameObject(pygame.sprite.Sprite):
                         elif delta[0] == 'x-min':
                             if self.rect.x <= delta[1]:
                                 self.kill()
+                        elif delta[0] == 'x-min-reverse':
+                            if self.rect.x <= delta[1]:
+                                self.scroll_direction = -1
+                        elif delta[0] == 'x-max-reverse':
+                            if self.rect.x >= delta[1]:
+                                self.scroll_direction = 1
                         elif delta[0] == 'frames-to-jump':
                             if self.jump == 0 and self.canJump:
                                 self.jump = delta[1]
@@ -245,18 +255,15 @@ class Effect(TCGameObject):
     def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
         TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding, parent)
         self.type="EFFECT"
-        #self.image = pygame.transform.scale(self.image, (20, 20))
         self.age = 0
-        self.radius = 1
+        #self.scaleFactor = 1
         self.life = 400
         
     def update(self, keys_pressed, clock):
         TCGameObject.update(self, keys_pressed, clock)
         
-        self.image = pygame.transform.smoothscale(self.image, (self.age * self.radius, self.age * self.radius))
-        #self.rect = self.rect.move(-self.rect.width/2, -self.rect.height/2)
-
-        self.rect.center = self.parent.rect.center
+        #loc = self.parent.image.get_rect().center
+        #self.image = pygame.transform.smoothscale(self.image, (self.age * self.scaleFactor, self.age * self.scaleFactor))
 
         if self.age < self.life:
             self.age += clock.get_time()
@@ -276,10 +283,23 @@ class Enemy(TCGameObject):
     def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
         TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding, parent)
         self.type="ENEMY"
+        self.hp = 10
+        self.scroll_direction = 1
+        self.x_bounded_by = [0,0]
         
-    def update(self, keys_pressed, clock, collisions):
+    def update(self, keys_pressed, clock):
         TCGameObject.update(self, keys_pressed, clock)
         
+    def checkHits(self, group):
+        
+        collisions = pygame.sprite.spritecollide(self, group, False, pygame.sprite.collide_circle_ratio(0.75))
+        
+        for thing in collisions:
+            if thing.name == "shoot-spell":
+                self.hp -= 1
+                
+        if self.hp <= 0:
+            self.kill()
         
 class Background(TCGameObject):
             
