@@ -1,4 +1,6 @@
 import pygame
+import random
+import math
 
 def makeEnemy(type, image_home):
     if type == "badger":
@@ -10,10 +12,10 @@ def makeEnemy(type, image_home):
         return badger
     elif type == "fox":
         foxControl = {
-            "ALWAYS":[('x-speed', -1.0), ('x-min', -200)]
+            "ALWAYS":[('x', -1.0), ('x-min', -200)]
         }
         fox = Enemy("fox", image_home, {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (700, 100), (0, 0))
-        fox.milliseconds_per_sprite = 100.0
+        fox.milliseconds_per_sprite = 200.0
         return fox
     return None
    
@@ -36,6 +38,7 @@ class TCGameObject(pygame.sprite.Sprite):
         self.parent = None
         self.slowParentDelay = 0
         self.slowParentAccum = [0,0]
+        self.slowParentInit = False
         
         self.x_delta = position[0]
         self.y_delta = position[1]
@@ -83,21 +86,28 @@ class TCGameObject(pygame.sprite.Sprite):
         newPosition = [self.x_delta, self.y_delta]
         if (self.parent != None):
             if (self.slowParentDelay != 0):
-                slowParentFactor = float(self.slowParentDelay)/100.0
-                
-                xDiffSigned = float(self.slowParentAccum[0] - self.parent.x_delta)
-                yDiffSigned = float(self.slowParentAccum[1] - self.parent.y_delta)
-                
-                slowParentIncrement = [slowParentFactor*xDiffSigned, slowParentFactor*yDiffSigned]
-                
-                if (abs(xDiffSigned) >= abs(slowParentIncrement[0])):
-                    self.slowParentAccum[0] -= slowParentIncrement[0]
-                
-                if (abs(yDiffSigned) >= abs(slowParentIncrement[1])):
-                    self.slowParentAccum[1] -= slowParentIncrement[1]
-                
-                newPosition[0] += self.slowParentAccum[0]
-                newPosition[1] += self.slowParentAccum[1]
+                if not self.slowParentInit:
+                    self.slowParentInit = True
+                    newPosition[0] += self.parent.x_delta
+                    newPosition[1] += self.parent.y_delta
+                    self.slowParentAccum[0] = newPosition[0]
+                    self.slowParentAccum[1] = newPosition[1]
+                else:
+                    slowParentFactor = float(self.slowParentDelay)/100.0
+                    
+                    xDiffSigned = float(self.slowParentAccum[0] - self.parent.x_delta)
+                    yDiffSigned = float(self.slowParentAccum[1] - self.parent.y_delta)
+                    
+                    slowParentIncrement = [slowParentFactor*xDiffSigned, slowParentFactor*yDiffSigned]
+                    
+                    if (abs(xDiffSigned) >= abs(slowParentIncrement[0])):
+                        self.slowParentAccum[0] -= slowParentIncrement[0]
+                    
+                    if (abs(yDiffSigned) >= abs(slowParentIncrement[1])):
+                        self.slowParentAccum[1] -= slowParentIncrement[1]
+                    
+                    newPosition[0] += self.slowParentAccum[0]
+                    newPosition[1] += self.slowParentAccum[1]
             else:
                 newPosition[0] += self.parent.x_delta
                 newPosition[1] += self.parent.y_delta
@@ -224,9 +234,10 @@ class Enemy(TCGameObject):
     base_speed = 3
     user_speed_modifier = 0
     level_speed_modifier = 0
+    disable_scrolling = False
     
-    def get_speed():
-        return (Enemy.user_speed_modifier + Enemy.base_speed + Enemy.level_speed_modifier)
+    def get_speed(base_increase=0):
+        return 0 if Enemy.disable_scrolling else (Enemy.user_speed_modifier + Enemy.base_speed + base_increase + Enemy.level_speed_modifier)
 
     def __init__(self, name, image_home, animation_config, key_press_responses, position=(0,0), padding=(0,0)):
         TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding)
@@ -242,27 +253,60 @@ class Background(TCGameObject):
         TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding)
         self.type="BACKGROUND"
         self.scrollMultiplier = 1.0
+        self.randomFactor = False
         
+        self.ignore = []
+        self.refreshIgnore()
+        
+    def refreshIgnore(self):
+        if (len(self.ignore) == 0):
+            for x in range(0, 10):
+                if bool(random.getrandbits(1)):
+                    self.ignore.append(x)
+        else:
+            for x in range(0, len(self.ignore)):
+                self.ignore[x] -= 1
+                if (self.ignore[x] < 0):
+                    self.ignore[x] += 10
+                
     def update(self):
         if self.x_delta <= -self.image.get_width():
             self.x_delta += self.image.get_width()
             
-        self.x_delta -= (Enemy.user_speed_modifier + Enemy.level_speed_modifier + 5)*self.scrollMultiplier
+        self.x_delta -= self.get_scroll()
         
         TCGameObject.update(self)
+        
+    def get_scroll(self):
+        return int(((Enemy.get_speed(2))*self.scrollMultiplier))
     
     def draw(self, screen):
         width = self.image.get_width()
         
         image_positions = []
+        positions_to_ignore = []
         
         image_positions.append(self.x_delta)
         
+        if (0 in self.ignore):
+            positions_to_ignore.append(self.x_delta)
+                    
         repeat = 1
         while image_positions[-1] + width < screen.get_width():
             image_positions.append(self.x_delta + (width*repeat))
+            if (repeat in self.ignore):
+                positions_to_ignore.append(self.x_delta + (width*repeat))
             repeat += 1
-            
+        
+        #TODO
+        #get an if statement to say if the image_positions list has "bumped"
+        #only decrement tile index when tile has moved down in image_positions
+        if (width%self.get_scroll()) == width%self.x_delta:
+            self.refreshIgnore()
+   
+        index = 0
         for position in image_positions:
-            screen.blit(self.image, (position, self.y_delta))
-                    
+            if not self.randomFactor or (not position in positions_to_ignore):
+                screen.blit(self.image, (position, self.y_delta))
+            index += 1
+        

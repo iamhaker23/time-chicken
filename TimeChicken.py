@@ -1,10 +1,12 @@
 import pygame
+import random
 from tc_utils import TCGameObject, Background, Enemy, makeEnemy
 
 class Game:
     
     def __init__(self):
         self.closegame = False
+        self.game_state = "Initialising"
 
     def run(self):
         pygame.init()
@@ -28,11 +30,18 @@ class Game:
         TEXT_X = 475
         hp = 100
         distance = 0
+        last_added_enemy_time=0
+        add_enemy_interval=2000.0
         
+        doing_bossfight = False
+        bossfight_wins = 0
+        distance_at_last_bossfight = 0
+        distance_to_next_bossfight = 50.0
             
         Enemy.base_speed = 3
         Enemy.user_speed_modifier = 0
         Enemy.level_speed_modifier = 0
+        Enemy.disable_scrolling = False
         
         ################################# END Game Config
 
@@ -60,8 +69,9 @@ class Game:
             ,"default" : ['chicken.png']
         }
 
-        chicken = TCGameObject("chicken", IMAGE_HOME, chickenAnims, chickenControls, (80,0), (0, 60))
+        chicken = TCGameObject("chicken", IMAGE_HOME, chickenAnims, chickenControls, (120,200), (0, 60))
         chicken.physics = True
+        chicken.mass = 1
         
         eggAnims = {
             "default" : ['Egg_1.png', 'Egg_2.png', 'Egg_3.png', 'Egg_4.png', 'Egg_5.png', 'Egg_6.png', 'Egg_7.png', 'Egg_8.png' ]
@@ -80,14 +90,23 @@ class Game:
         layer1.add(chicken)
         layer2.add(egg)
         
+        trees = Background("trees", IMAGE_HOME, {"default":["tree1.png"]}, None, position=(0, 480))
+        trees.scrollMultiplier = 0.8
+        trees.randomFactor = True
+        background.add(trees)
+        
         bg1 = Background("grass", IMAGE_HOME, {"default":["grass_1.png"]}, None, position=(0, 610))
         background.add(bg1)
         
         bg2 = Background("clouds", IMAGE_HOME, {"default":["clouds_1.png"]}, None, position=(0, 50))
         bg2.scrollMultiplier = 0.6
         background.add(bg2)
+        
+        
+        house = TCGameObject("clouds", IMAGE_HOME, {"default":["house.png"]},{"ALWAYS":[('x-speed', -1.0), ('x-min', -200)]}, position=(0, 0))
+        enemies.add(house)
 
-        print("Initialising Time Chicken...")
+        print(self.game_state + " Time Chicken...")
 
         spell = {"color":[255, 255, 255], "text":"", "position":(0,0)}
         cast = 0
@@ -138,24 +157,54 @@ class Game:
                             self.closegame = True
                         elif event.key == pygame.K_r:
                             reset = True
+                            self.game_state = "Restarting"
                 if event.type == pygame.KEYUP:
                     keys_pressed[str(event.key)] = False
                     if event.key == pygame.K_TAB:
                         spellbook = False
                 ######################      
             
+            current_ticks = pygame.time.get_ticks()
+            random_delay = random.uniform(0.0, 1000.0)
             
-            if pygame.time.get_ticks() % 150.0 == 0.0 and len(enemies.sprites()) == 0:
-                #TODO: after certain time, do a boss fight with one fox
-                #Chicken stops walking
-                #Continue only after defeating box
-                #rotate colors/randomise bg layers after win
-                #badgers return until next boss fight
-                if pygame.time.get_ticks() <= 5000.0:
+            #if yopu are at (or a bit past) the next bossfight
+            if distance - (distance_at_last_bossfight + distance_to_next_bossfight) >= 0:
+                doing_bossfight = True
+                Enemy.disable_scrolling = True
+                distance_at_last_bossfight = distance
+            
+            if not doing_bossfight:
+                #add enemies one at a time at random intervals
+                if (current_ticks - last_added_enemy_time) > (add_enemy_interval + random_delay) and len(enemies.sprites()) == 0:
+                    
+                    #badgers return until next boss fight
+                    last_added_enemy_time = current_ticks    
                     enemies.add(makeEnemy("badger", IMAGE_HOME))
-                else:
+            else:
+                #Chicken stops walking
+                #WAIT THE CHICKEN ALREADY ISN'T WALKING!?
+                #mind.blown=True, right?
+                               
+                #add boss if not added
+                if (len(enemies.sprites()) != 1) or enemies.sprites()[0].name != "fox":
+                    enemies.remove(enemies.sprites())
                     enemies.add(makeEnemy("fox", IMAGE_HOME))
-            
+                
+                #Continue only after defeating boss
+                #Temporarily, toot is the win condition
+                if (spell["text"] == "toot"):
+                    Enemy.disable_scrolling = False
+                    doing_bossfight = False
+                    bossfight_wins += 1
+                    #next boss is further away
+                    distance_to_next_bossfight += 50
+                    enemies.remove(enemies.sprites())
+                    #rotate colors/randomise bg layers after win
+                    r = (bg_col[0] + 175) % 255
+                    g = (bg_col[0] + 175) % 255
+                    b = (bg_col[0] + 175) % 255
+                    bg_col = (r,g,b)
+        
             if not spellbook and not paused:
                 gameDisplay.fill(bg_col)
                 

@@ -6,13 +6,14 @@ At least, that's what they say. But somewhere between travelling and mastering m
 Escape the realm and protect the egg from the forces of good.
 
 You are Time Chicken. The Chicken with powers. Time powers.
-
   
-# How To Play
+# Controls
   - Jump over enemies (SPACEBAR)
+  - Slow down/Speed up (LEFT ARROW, RIGHT ARROW)
   - Type spells to cast (ABCDEFGHIJKLMNOPQRSTUVWXYZ)
+  - Delete typed letters (BACKSPACE)
   - Check your spell list (TAB)
-  - Pause/Save/Quit (ESC)
+  - Pause (ESC)
 
 # Windows Usage
 In CMD:
