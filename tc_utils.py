@@ -8,6 +8,13 @@ def makeEnemy(type, image_home):
         badger = Enemy("badger", image_home, {"default":['BigBadger_1.png','BigBadger_2.png']}, badgerControl, (700, 200), (0, 0))
         badger.milliseconds_per_sprite = 100.0
         return badger
+    elif type == "fox":
+        foxControl = {
+            "ALWAYS":[('x-speed', -1.0), ('x-min', -200)]
+        }
+        fox = Enemy("fox", image_home, {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (700, 100), (0, 0))
+        fox.milliseconds_per_sprite = 100.0
+        return fox
     return None
    
 class TCGameObject(pygame.sprite.Sprite):

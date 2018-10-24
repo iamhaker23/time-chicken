@@ -142,10 +142,19 @@ class Game:
                     keys_pressed[str(event.key)] = False
                     if event.key == pygame.K_TAB:
                         spellbook = False
-                ######################        
+                ######################      
+            
             
             if pygame.time.get_ticks() % 150.0 == 0.0 and len(enemies.sprites()) == 0:
-                enemies.add(makeEnemy("badger", IMAGE_HOME))
+                #TODO: after certain time, do a boss fight with one fox
+                #Chicken stops walking
+                #Continue only after defeating box
+                #rotate colors/randomise bg layers after win
+                #badgers return until next boss fight
+                if pygame.time.get_ticks() <= 5000.0:
+                    enemies.add(makeEnemy("badger", IMAGE_HOME))
+                else:
+                    enemies.add(makeEnemy("fox", IMAGE_HOME))
             
             if not spellbook and not paused:
                 gameDisplay.fill(bg_col)
