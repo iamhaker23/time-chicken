@@ -2,11 +2,75 @@ import pygame
 import random
 from tc_utils import TCGameObject, Background, Enemy, makeEnemy, makeEffect
 
+class Menu:
+    def __init__(self):
+        self.do_game = False
+        self.closegame = False
+        self.options = ["Story Flow", "Endless Flow", "Quit"]
+        
+    def run(self, game):
+        pygame.init()
+        pygame.font.init()
+
+        bigfont = pygame.font.Font('Assets/Fonts/tc_1_bold.ttf', 80)
+        
+        IMAGE_HOME = "Assets/Images/"
+        display_width = 1280
+        display_height = 720
+        gameDisplay = pygame.display.set_mode((display_width,display_height))
+        bg_col = (200, 170, 120)
+        clock = pygame.time.Clock()
+        
+        
+        self.do_game = False
+        self.closegame = False
+        game.return_to_menu = False
+        self.selected_option = 0
+        
+        
+        while not self.do_game and not self.closegame:
+            print("Menu loop.")
+            gameDisplay.fill(bg_col)
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.closegame = True
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        option_text = self.options[self.selected_option]
+                        if (option_text == "Quit"):
+                            self.closegame = True
+                        else:
+                        
+                            #TODO: change game settings here
+                            if option_text == "Story Flow":
+                                print("Starting " + option_text)
+                            elif option_text == "Endless Flow":
+                                print("Starting " + option_text)
+                                
+                            self.do_game = True
+                            
+                    elif event.key == pygame.K_UP:
+                        self.selected_option = (self.selected_option - 1) if self.selected_option > 0 else (len(self.options)-1) 
+                    elif event.key == pygame.K_DOWN:
+                        self.selected_option = (self.selected_option + 1) if self.selected_option < (len(self.options)-1) else 0
+                        
+            option_pos = 0
+            for option in self.options:
+                option_color = (255, 255, 155) if self.options[self.selected_option] == option else (100, 100, 80)
+                gameDisplay.blit(bigfont.render(option, True,  option_color), (450, 20 + option_pos))
+                option_pos += 80
+            
+            
+            pygame.display.update()
+            clock.tick(60)
+
 class Game:
     
     def __init__(self):
         self.closegame = False
         self.game_state = "Initialising"
+        self.return_to_menu = False
 
     def run(self):
         pygame.init()
@@ -23,6 +87,7 @@ class Game:
         pygame.display.set_caption('Time Chicken from Chicken Coup')
         bg_col = (200, 170, 120)
         self.closegame = False
+        self.return_to_menu = False
         reset = False
         clock = pygame.time.Clock()
         keys_pressed = {"ALWAYS" : True}
@@ -58,7 +123,11 @@ class Game:
             ,"player": layer1
             ,"effects" : layer3
         }
-
+        
+        #register the layers with TCGameObject so objects can spawn, e.g. effects
+        TCGameObject.scene_groups = scene_groups
+        TCGameObject.image_home = IMAGE_HOME
+        
         chickenControls = {
             "ALWAYS":[('walk', True)]
             ,str(pygame.K_RIGHT):[('x', 5)]
@@ -71,15 +140,15 @@ class Game:
             ,"default" : ['chicken.png']
         }
 
-        chicken = TCGameObject("chicken", IMAGE_HOME, chickenAnims, chickenControls, (120,200), (0, 60))
+        chicken = TCGameObject("chicken", chickenAnims, chickenControls, (120,100), (0, 60))
         chicken.physics = True
-        chicken.mass = 1
+        chicken.mass = 3
         
         layer1.add(chicken)
         
         
-        house = TCGameObject("house", IMAGE_HOME, {"default":["house.png"]},{"ALWAYS":[('x-speed', -0.9), ('x-min', -500)]}, position=(0, 57))
-        rock = TCGameObject("rock", IMAGE_HOME, {"default":["rock.png"]},{"ALWAYS":[('x-speed', -0.9), ('x-min', -500)]}, position=(100, 270))
+        house = TCGameObject("house", {"default":["house.png"]},{"ALWAYS":[('x-speed', -0.9), ('x-min', -500)]}, position=(0, 57))
+        rock = TCGameObject("rock", {"default":["rock.png"]},{"ALWAYS":[('x-speed', -0.9), ('x-min', -500)]}, position=(100, 270))
         layer2.add(house)
         layer3.add(rock)
                
@@ -91,7 +160,7 @@ class Game:
             "ALWAYS":[('frames-to-jump', chicken.jump)]
         }
 
-        egg = TCGameObject("egg", IMAGE_HOME, eggAnims, eggControls, (-40, 27), (0, 0))
+        egg = TCGameObject("egg", eggAnims, eggControls, (-40, 27), (0, 0))
 
         egg.slowParentDelay = 10
         egg.parent = chicken
@@ -100,21 +169,21 @@ class Game:
         layer1.add(egg)
         
         
-        clouds = Background("clouds", IMAGE_HOME, {"default":["clouds_1.png"]}, None, position=(0, 50))
+        clouds = Background("clouds", {"default":["clouds_1.png"]}, None, position=(0, 50))
         clouds.scrollMultiplier = 0.2
         background.add(clouds)
         
         
-        mountains = Background("mountains", IMAGE_HOME, {"default":["mountains.png"]}, None, position=(0, 450))
+        mountains = Background("mountains", {"default":["mountains.png"]}, None, position=(0, 450))
         mountains.scrollMultiplier = 0.5
         background.add(mountains)
         
-        trees = Background("trees", IMAGE_HOME, {"default":["Oak.png"]}, None, position=(0, 375))
+        trees = Background("trees", {"default":["Oak.png"]}, None, position=(0, 375))
         trees.scrollMultiplier = 0.8
-        trees.randomFactor = True
+        #trees.randomFactor = True
         background.add(trees)
         
-        grass = Background("grass", IMAGE_HOME, {"default":["grass_1.png"]}, None, position=(0, 550))
+        grass = Background("grass", {"default":["grass_1.png"]}, None, position=(0, 550))
         background.add(grass)
 
         
@@ -140,7 +209,7 @@ class Game:
         spellbook = False
         paused = False
 
-        while not self.closegame and not reset:
+        while not self.closegame and not reset and not self.return_to_menu:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.closegame = True
@@ -172,6 +241,9 @@ class Game:
                         elif event.key == pygame.K_r:
                             reset = True
                             self.game_state = "Restarting"
+                        elif event.key == pygame.K_m:
+                            self.return_to_menu = True
+                            print("Return to menu...")
                 if event.type == pygame.KEYUP:
                     keys_pressed[str(event.key)] = False
                     if event.key == pygame.K_TAB:
@@ -193,7 +265,7 @@ class Game:
                     
                     #badgers return until next boss fight
                     last_added_enemy_time = current_ticks    
-                    enemies.add(makeEnemy("badger", IMAGE_HOME))
+                    enemies.add(makeEnemy("badger"))
             else:
                 #Chicken stops walking
                 #WAIT THE CHICKEN ALREADY ISN'T WALKING!?
@@ -202,7 +274,7 @@ class Game:
                 #add boss if not added
                 if (len(enemies.sprites()) != 1) or enemies.sprites()[0].name != "fox":
                     enemies.remove(enemies.sprites())
-                    enemies.add(makeEnemy("fox", IMAGE_HOME))
+                    enemies.add(makeEnemy("fox"))
                 
                 if enemies.sprites()[0].hp == 1:
                     #Continue only after defeating boss
@@ -220,7 +292,7 @@ class Game:
                     tree_images = ["Oak.png", "Lime.png", "Pine.png", "NotPine.png"]
                     print(tree_images[bossfight_wins%len(tree_images)])
                     print(bossfight_wins%len(tree_images))
-                    trees.setAnimations({"default":[tree_images[bossfight_wins%len(tree_images)]]}, IMAGE_HOME, True)
+                    trees.setAnimations({"default":[tree_images[bossfight_wins%len(tree_images)]]}, True)
         
             if not spellbook and not paused:
                 gameDisplay.fill(bg_col)
@@ -242,7 +314,11 @@ class Game:
 
                 #lose hp for touching enemies
                 collisions = pygame.sprite.spritecollide(chicken, enemies, False, pygame.sprite.collide_circle_ratio(0.5))
-                hp -= len(collisions)
+                
+                if (len(collisions) > 0):
+                    hp -= len(collisions)
+                    if bool(random.getrandbits(1)):
+                        layer3.add(makeEffect("hit-marker", chicken))
                 
                 for enemy in enemies.sprites():
                     enemy.checkHits(layer3)
@@ -276,14 +352,14 @@ class Game:
                     if spell["text"] == spellsList[0]:
                         if (hp <= 195):
                             hp += 5
-                            layer3.add(makeEffect("heal-spell", IMAGE_HOME, chicken))
+                            layer3.add(makeEffect("heal-spell", chicken))
                     elif spell["text"] == spellsList[1]:
                         if not doing_bossfight:
                             for sprite in enemies.sprites():
                                 if (sprite.x_delta >= chicken.x_delta):
                                     sprite.x_delta = chicken.x_delta - 100
                     elif spell["text"] == spellsList[2]:
-                        layer3.add(makeEffect("shoot-spell", IMAGE_HOME, chicken))
+                        layer3.add(makeEffect("shoot-spell", chicken))
                     
                     
                     spell["color"] = [255, 255, 255]
@@ -328,6 +404,7 @@ class Game:
                 gameDisplay.blit(smallfont.render("ESC to resume", True, (255, 255, 155)), (TEXT_X, 150))
                 gameDisplay.blit(smallfont.render("CTRL-X to quit", True, (255, 255, 155)), (TEXT_X, 280))
                 gameDisplay.blit(smallfont.render("R to restart", True, (255, 255, 155)), (TEXT_X, 410))
+                gameDisplay.blit(smallfont.render("M to return to menu", True, (255, 255, 155)), (TEXT_X, 540))
                 
                 
                 
@@ -336,10 +413,15 @@ class Game:
 
 if __name__ == '__main__':
 
+    menu = Menu()
     game = Game()
     
-    while not game.closegame:
-        game.run()
+    
+    while not menu.closegame and not game.closegame:
+        menu.run(game)
+        if menu.do_game:
+            while not game.closegame and not game.return_to_menu:
+                game.run()
 
     print("Quitting Time Chicken...")
     pygame.quit()

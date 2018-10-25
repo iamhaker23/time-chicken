@@ -2,34 +2,42 @@ import pygame
 import random
 import math
 
-def makeEnemy(type, image_home):
+def makeEnemy(type):
     if type == "badger":
         badgerControl = {
             "ALWAYS":[('x-speed', -1.0), ('x-min', -200)]
         }
-        badger = Enemy("badger", image_home, {"default":['BigBadger_1.png','BigBadger_2.png']}, badgerControl, (700, 200), (0, 0))
+        badger = Enemy("badger", {"default":['BigBadger_1.png','BigBadger_2.png']}, badgerControl, (700, 200), (0, 0))
         badger.milliseconds_per_sprite = 100.0
         return badger
     elif type == "fox":
         foxControl = {
             "ALWAYS":[('x', -1.0), ('x-min-reverse', 400), ('x-max-reverse', 611)]
         }
-        fox = Enemy("fox", image_home, {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (610, 100), (0, 0))
+        fox = Enemy("fox", {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (610, 100), (0, 0))
         fox.milliseconds_per_sprite = 200.0
         return fox
     return None
     
-def makeEffect(type, image_home, parent):
+def makeEffect(type, parent):
     if type == "heal-spell":
-        effect = Effect("heal-spell", image_home, {"default":['spell1.png']}, parent=parent)
+        effect = Effect("heal-spell", {"default":['spell1.png']}, parent=parent)
         return effect
     elif type == "shoot-spell":
-        effect = Effect("shoot-spell", image_home, {"default":['spell2.png']}, {"ALWAYS":[('x',5)]}, position=(parent.x_delta, parent.y_delta))
+        effect = Effect("shoot-spell", {"default":['spell2.png']}, {"ALWAYS":[('x',5)]}, position=(parent.x_delta, parent.y_delta))
         effect.life = 600
+        return effect
+    elif type == "hit-marker":
+        effect = Effect("hit-marker", {"default":['hit.png']}, position=(parent.x_delta, parent.y_delta), padding=(50, 60))
+        effect.life = 50
         return effect
     return None
    
 class TCGameObject(pygame.sprite.Sprite):
+
+
+    scene_groups = None
+    image_home = ""
         
     def update(self, keys_pressed=None, clock=None):
         self.doPhysics()
@@ -40,7 +48,7 @@ class TCGameObject(pygame.sprite.Sprite):
                 self.processKeys(keys_pressed)
         self.updatePosition()
         
-    def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
+    def __init__(self, name, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
         pygame.sprite.Sprite.__init__(self)
         
         ######## START INSTANCE VARIABLES
@@ -70,7 +78,7 @@ class TCGameObject(pygame.sprite.Sprite):
         ##############
         
         #generate sprite list
-        self.setAnimations(animation_config, image_home)
+        self.setAnimations(animation_config)
         
         fps = 15.0
         self.milliseconds_per_sprite = 1000.0/fps
@@ -85,18 +93,20 @@ class TCGameObject(pygame.sprite.Sprite):
         
         self.key_press_responses = key_press_responses
                     
-    def setAnimations(self, conf, image_home, update=False):
+    def setAnimations(self, conf, update=False):
         for animation_name in conf:
             animation_images = conf[animation_name]
             self.animations[animation_name] = []
             self.animation_activators[animation_name] = []
             for image in animation_images:
-                self.animations[animation_name].append(pygame.image.load(image_home + image))
+                self.animations[animation_name].append(pygame.image.load(TCGameObject.image_home + image))
         if (update):
             self.updateAnimation(self.milliseconds_per_sprite)
                     
     #Add this draw function so we can draw individual sprites
     def updatePosition(self):
+        
+        #newPosition = [self.x_delta + self.padding[0], self.y_delta + self.padding[1]]
         
         newPosition = [self.x_delta, self.y_delta]
                 
@@ -252,8 +262,8 @@ class TCGameObject(pygame.sprite.Sprite):
 
             
 class Effect(TCGameObject):
-    def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
-        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding, parent)
+    def __init__(self, name, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
+        TCGameObject.__init__(self, name, animation_config, key_press_responses, position, padding, parent)
         self.type="EFFECT"
         self.age = 0
         #self.scaleFactor = 1
@@ -280,8 +290,8 @@ class Enemy(TCGameObject):
     def get_speed(base_increase=0):
         return 0 if Enemy.disable_scrolling else (Enemy.user_speed_modifier + Enemy.base_speed + base_increase + Enemy.level_speed_modifier)
 
-    def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
-        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding, parent)
+    def __init__(self, name, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
+        TCGameObject.__init__(self, name, animation_config, key_press_responses, position, padding, parent)
         self.type="ENEMY"
         self.hp = 10
         self.scroll_direction = 1
@@ -297,14 +307,16 @@ class Enemy(TCGameObject):
         for thing in collisions:
             if thing.name == "shoot-spell":
                 self.hp -= 1
+                if TCGameObject.scene_groups != None and bool(random.getrandbits(1)):
+                    TCGameObject.scene_groups["effects"].add(makeEffect("hit-marker", thing))
                 
         if self.hp <= 0:
             self.kill()
         
 class Background(TCGameObject):
             
-    def __init__(self, name, image_home, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
-        TCGameObject.__init__(self, name, image_home, animation_config, key_press_responses, position, padding, parent)
+    def __init__(self, name, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
+        TCGameObject.__init__(self, name, animation_config, key_press_responses, position, padding, parent)
         self.type="BACKGROUND"
         self.scrollMultiplier = 1.0
         
