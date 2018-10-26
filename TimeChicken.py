@@ -17,50 +17,67 @@ class Menu:
         IMAGE_HOME = "Assets/Images/"
         display_width = 1280
         display_height = 720
-        gameDisplay = pygame.display.set_mode((display_width,display_height))
-        bg_col = (200, 170, 120)
+        menuGameDisplay = pygame.display.set_mode((display_width,display_height))
+        bg_col = (50, 10, 40)
         clock = pygame.time.Clock()
-        
+        delay = 0
         
         self.do_game = False
         self.closegame = False
         game.return_to_menu = False
         self.selected_option = 0
         
+        OPENING_DELAY = 100
+        
+        TCGameObject.image_home = IMAGE_HOME
+        
+        layer1 = pygame.sprite.LayeredUpdates()
+        house = TCGameObject("house", {"default":["menu_2.png"]},{"ALWAYS":[('x-speed', -1), ('x-min', -500)]}, position=(0, 0))
+        bg = TCGameObject("house", {"default":["menu_1.png"]}, position=(420, -30))
+        layer1.add(house)
+        layer1.add(bg)
         
         while not self.do_game and not self.closegame:
-            print("Menu loop.")
-            gameDisplay.fill(bg_col)
+            menuGameDisplay.fill(bg_col)
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.closegame = True
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_RETURN:
-                        option_text = self.options[self.selected_option]
-                        if (option_text == "Quit"):
-                            self.closegame = True
-                        else:
-                        
-                            #TODO: change game settings here
-                            if option_text == "Story Flow":
-                                print("Starting " + option_text)
-                            elif option_text == "Endless Flow":
-                                print("Starting " + option_text)
-                                
-                            self.do_game = True
+                    
+                if delay >= OPENING_DELAY:
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_RETURN:
+                            option_text = self.options[self.selected_option]
+                            if (option_text == "Quit"):
+                                self.closegame = True
+                            else:
                             
-                    elif event.key == pygame.K_UP:
-                        self.selected_option = (self.selected_option - 1) if self.selected_option > 0 else (len(self.options)-1) 
-                    elif event.key == pygame.K_DOWN:
-                        self.selected_option = (self.selected_option + 1) if self.selected_option < (len(self.options)-1) else 0
+                                #TODO: change game settings here
+                                if option_text == "Story Flow":
+                                    print("Starting " + option_text)
+                                elif option_text == "Endless Flow":
+                                    print("Starting " + option_text)
+                                    
+                                self.do_game = True
+                                
+                        elif event.key == pygame.K_UP:
+                            self.selected_option = (self.selected_option - 1) if self.selected_option > 0 else (len(self.options)-1) 
+                        elif event.key == pygame.K_DOWN:
+                            self.selected_option = (self.selected_option + 1) if self.selected_option < (len(self.options)-1) else 0
                         
             option_pos = 0
             for option in self.options:
                 option_color = (255, 255, 155) if self.options[self.selected_option] == option else (100, 100, 80)
-                gameDisplay.blit(bigfont.render(option, True,  option_color), (450, 20 + option_pos))
+                menuGameDisplay.blit(bigfont.render(option, True,  option_color), (80, 200 + option_pos))
                 option_pos += 80
             
+            if delay >= OPENING_DELAY:
+                house.update({"ALWAYS":True}, clock)
+            else:
+                delay += 1
+            
+            bg.update(clock=clock)
+            layer1.draw(menuGameDisplay)
             
             pygame.display.update()
             clock.tick(60)
@@ -76,6 +93,7 @@ class Game:
         pygame.init()
         pygame.font.init()
 
+        giantfont = pygame.font.Font('Assets/Fonts/tc_1_bold.ttf', 150)
         bigfont = pygame.font.Font('Assets/Fonts/tc_1_bold.ttf', 80)
         smallfont = pygame.font.Font('Assets/Fonts/tc_1.ttf', 40)
 
@@ -99,6 +117,7 @@ class Game:
         add_enemy_interval=2000.0
         
         doing_bossfight = False
+        boss_hp = 0
         bossfight_wins = 0
         distance_at_last_bossfight = 0
         distance_to_next_bossfight = 50.0
@@ -129,20 +148,22 @@ class Game:
         TCGameObject.image_home = IMAGE_HOME
         
         chickenControls = {
-            "ALWAYS":[('walk', True)]
-            ,str(pygame.K_RIGHT):[('x', 5)]
-            ,str(pygame.K_LEFT):[('x', -5)]
-            ,str(pygame.K_SPACE):[('walk', False), ('frames-to-jump', 15)]
+            #"ALWAYS":[('walk', True)]
+            str(pygame.K_RIGHT):[('x', 5), ('walk', True)]
+            ,str(pygame.K_LEFT):[('x', -5), ('walk', True)]
+            ,str(pygame.K_SPACE):[('frames-to-jump', 15)]
         }
 
         chickenAnims = {
             "walk" : ['chicken1.png', 'chicken2.png', 'chicken3.png', 'chicken4.png', 'chicken5.png']
             ,"default" : ['chicken.png']
+            ,"cast": ['magic1.png', 'magic2.png', 'magic3.png', 'magic4.png', 'magic5.png', 'magic6.png', 'magic7.png', 'magic8.png']
         }
 
         chicken = TCGameObject("chicken", chickenAnims, chickenControls, (120,100), (0, 60))
         chicken.physics = True
         chicken.mass = 3
+        chicken.setAnimationState('walk', True)
         
         layer1.add(chicken)
         
@@ -160,7 +181,7 @@ class Game:
             "ALWAYS":[('frames-to-jump', chicken.jump)]
         }
 
-        egg = TCGameObject("egg", eggAnims, eggControls, (-40, 27), (0, 0))
+        egg = TCGameObject("egg", eggAnims, eggControls, (-40, 10), (0, 0))
 
         egg.slowParentDelay = 10
         egg.parent = chicken
@@ -193,7 +214,7 @@ class Game:
         spell = {"color":[255, 255, 255], "text":"", "position":(0,0)}
         cast = 0
         lastSpell = ""
-
+        spell_queue = []
         spells = {
             "toot":"gets them everytime"
             ,"cluck":"???"
@@ -205,6 +226,7 @@ class Game:
             ,"gutgutgdak":"???"
         }
         message = {"text":"", "color": (255, 255, 255), "frames":0, "position":(0,0)}
+        speech = {"text":"", "color": (255, 255, 255), "frames":0, "position":(400, 200)}
 
         spellbook = False
         paused = False
@@ -259,6 +281,9 @@ class Game:
                 Enemy.disable_scrolling = True
                 distance_at_last_bossfight = distance
             
+            
+                
+                
             if not doing_bossfight:
                 #add enemies one at a time at random intervals
                 if (current_ticks - last_added_enemy_time) > (add_enemy_interval + random_delay) and len(enemies.sprites()) == 0:
@@ -270,28 +295,49 @@ class Game:
                 #Chicken stops walking
                 #WAIT THE CHICKEN ALREADY ISN'T WALKING!?
                 #mind.blown=True, right?
+                #chicken.setAnimationState('walk', False)
                                
                 #add boss if not added
-                if (len(enemies.sprites()) != 1) or enemies.sprites()[0].name != "fox":
-                    enemies.remove(enemies.sprites())
-                    enemies.add(makeEnemy("fox"))
+                #Modified: don't kill everything else in layer as in earlier implementation
+                boss_is_added = False
+                for sprite in enemies.sprites():
+                    if sprite.type == "ENEMY" and sprite.name == "fox":
+                        boss_is_added = True
+                        boss_hp = sprite.hp
+                        break
                 
-                if enemies.sprites()[0].hp == 1:
+                if not boss_is_added:
+                    boss = makeEnemy("fox")
+                    enemies.add(boss)
+                    boss_hp = boss.hp
+                    
+                    
+                    #chicken.setAnimationState('default', True)
+                                        
+                    if speech["frames"] == 0 and speech["text"] != "HALT!":
+                        speech["text"] = "STOP, CHICKEN!"
+                        speech["color"] = (255, 0, 0)
+                        speech["frames"] = 30
+                
+                if boss_hp <= 0:
                     #Continue only after defeating boss
                     Enemy.disable_scrolling = False
+                    
+                    
+                    #chicken.setAnimationState('walk', True)
+                    #chicken.setAnimationState('default', False)
+                    
+                    Enemy.boss_element = (Enemy.boss_element + 1) if Enemy.boss_element+1 < len(Enemy.boss_elements) else 0
                     doing_bossfight = False
                     bossfight_wins += 1
                     #next boss is further away
                     distance_to_next_bossfight += 10
-                    enemies.remove(enemies.sprites())
                     #rotate colors/randomise bg layers after win
                     r = (bg_col[0] + 175) % 255
                     g = (bg_col[0] + 175) % 255
                     b = (bg_col[0] + 175) % 255
                     bg_col = (r,g,b)
                     tree_images = ["Oak.png", "Lime.png", "Pine.png", "NotPine.png"]
-                    print(tree_images[bossfight_wins%len(tree_images)])
-                    print(bossfight_wins%len(tree_images))
                     trees.setAnimations({"default":[tree_images[bossfight_wins%len(tree_images)]]}, True)
         
             if not spellbook and not paused:
@@ -312,16 +358,21 @@ class Game:
                     if (scene_group != "background"):
                         scene_groups[scene_group].draw(gameDisplay)
 
-                #lose hp for touching enemies
+                for enemy in enemies.sprites():
+                    #now "EFFECT" can also appear in enemy layer
+                    if enemy.type == "ENEMY":
+                        #enemy can check for hits against the "effects" layer which contains spells
+                        enemy.checkHits(layer3)
+                        #enemy will add it's attacks into the "enemy" layer
+                        enemy.attack(clock, chicken)
+                
+                #lose hp for touching enemies or enemy spells (which are spawned in "enemy" layer)
                 collisions = pygame.sprite.spritecollide(chicken, enemies, False, pygame.sprite.collide_circle_ratio(0.5))
                 
                 if (len(collisions) > 0):
-                    hp -= len(collisions)
+                    hp -= len(collisions) * (3 if doing_bossfight else 1)
                     if bool(random.getrandbits(1)):
                         layer3.add(makeEffect("hit-marker", chicken))
-                
-                for enemy in enemies.sprites():
-                    enemy.checkHits(layer3)
                 
                 spell["position"] = (chicken.rect.x + 50, chicken.rect.y - 80)
                 
@@ -332,10 +383,17 @@ class Game:
                     spell["color"][0] -= 2
                     spell["color"][1] -= 5
                     spell["color"][2] -= 10
+                    
                     if cast == 0:
-                        #spell["text"] = ""
                         spell["color"] = [255, 255, 255]
-                
+                        chicken.setAnimationState('cast', False)
+                        #chicken.setAnimationState('walk', True)
+                        
+                if not doing_bossfight and not Enemy.disable_scrolling and cast == 0:
+                    chicken.setAnimationState("walk", True)
+                else:
+                    chicken.setAnimationState("walk", False)
+                        
                 if message["text"] != "" and message["frames"] > 0:
                     if (message["text"] == "CANCEL!"):
                         message["position"] = spell["position"]
@@ -346,31 +404,47 @@ class Game:
                 else:
                     message["text"] = ""
                     
-                if spell["text"] in spells and cast == 0:
                     
+                if speech["text"] != "" and speech["frames"] > 0:
+                    gameDisplay.blit(giantfont.render(speech["text"], True, speech["color"]), speech["position"])
+                    speech["frames"] -= 1
+                else:
+                    speech["text"] = ""
+                    
+                     
+                if spell["text"] in spells:
+                    
+                    spell_queue.append(spell["text"])        
+                    
+                    spell["color"] = [255, 255, 255]
+                    
+                    spell["text"] = ""
+                    
+                if cast == 0 and len(spell_queue) >= 1:
                     spellsList = list(spells.keys())
-                    if spell["text"] == spellsList[0]:
+                    current_spell = spell_queue.pop(0)
+                    
+                    message["text"] = "No Effect!" if (current_spell == "cluck" and doing_bossfight) else "Cast "+current_spell+"!"
+                    message["color"] = (255, 255, 155)
+                    message["frames"] = 30
+                    
+                    if current_spell == spellsList[0]:
                         if (hp <= 195):
                             hp += 5
                             layer3.add(makeEffect("heal-spell", chicken))
-                    elif spell["text"] == spellsList[1]:
+                    elif current_spell == spellsList[1]:
                         if not doing_bossfight:
                             for sprite in enemies.sprites():
                                 if (sprite.x_delta >= chicken.x_delta):
                                     sprite.x_delta = chicken.x_delta - 100
-                    elif spell["text"] == spellsList[2]:
+                    elif current_spell == spellsList[2]:
                         layer3.add(makeEffect("shoot-spell", chicken))
-                    
-                    
-                    spell["color"] = [255, 255, 255]
-                    
-                    lastSpell = spell["text"]
-                    spell["text"] = ""
-                    message["text"] = "Cast "+lastSpell+"!"
-                    
-                    message["color"] = (255, 255, 155)
-                    message["frames"] = 30
+                    elif current_spell == spellsList[3]:
+                        layer3.add(makeEffect("hit-spell", chicken))
+                        
                     cast = 20
+                    chicken.setAnimationState('walk', False)
+                    chicken.setAnimationState('cast', True)
                 
                 iconImg = "icon1.png" if (hp >= 30) else "icon2.png"
                 gameDisplay.blit(pygame.image.load(IMAGE_HOME + iconImg), (0, 10))
@@ -380,9 +454,16 @@ class Game:
                 uiXPadding = 200
                 
                 gameDisplay.fill((200, 25, 25), pygame.Rect(uiXPadding, 90, (300*(hp/100) if hp > 0 else 1), 20))#,special_flags=pygame.BLEND_RGBA_MULT)
-                gameDisplay.blit(bigfont.render(str(hp) + "hp", True, (255,255,255)), (uiXPadding,95))
+                hp_str = "0" if hp <= 0 else str(hp)
+                gameDisplay.blit(bigfont.render(hp_str + "hp", True, (255,255,255)), (uiXPadding,95))
                 
-                progress_to_bossfight = (distance-distance_at_last_bossfight)/distance_to_next_bossfight
+                
+                if doing_bossfight and boss_hp > 0:
+                    gameDisplay.fill((150, 25, 150), pygame.Rect(uiXPadding, 650, (800*(boss_hp/100) if boss_hp > 0 else 1), 20))
+                    boss_hp_str = "0" if boss_hp <= 0 else str(boss_hp)
+                    
+                
+                progress_to_bossfight = (distance-distance_at_last_bossfight)/(distance_to_next_bossfight if distance_to_next_bossfight > 0 else 1)
                 gameDisplay.fill((25, 25, 200), pygame.Rect(uiXPadding, 5, (1000*(progress_to_bossfight) if progress_to_bossfight > 0 else 1), 5))#,special_flags=pygame.BLEND_RGBA_MULT)
                 gameDisplay.blit(bigfont.render("{:.0f}".format(distance) + "m", True, (255,255,255)), (uiXPadding,0))
                 
@@ -413,9 +494,10 @@ class Game:
 
 if __name__ == '__main__':
 
+    
+
     menu = Menu()
     game = Game()
-    
     
     while not menu.closegame and not game.closegame:
         menu.run(game)

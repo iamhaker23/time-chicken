@@ -16,6 +16,8 @@ def makeEnemy(type):
         }
         fox = Enemy("fox", {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (610, 100), (0, 0))
         fox.milliseconds_per_sprite = 200.0
+        fox.hp = 100
+        fox.spells = ["fox-elemental-spell", "heal-spell"]
         return fox
     return None
     
@@ -24,8 +26,16 @@ def makeEffect(type, parent):
         effect = Effect("heal-spell", {"default":['spell1.png']}, parent=parent)
         return effect
     elif type == "shoot-spell":
-        effect = Effect("shoot-spell", {"default":['spell2.png']}, {"ALWAYS":[('x',5)]}, position=(parent.x_delta, parent.y_delta))
-        effect.life = 600
+        effect = Effect("shoot-spell", {"default":['spell2.png']}, {"ALWAYS":[('x',10)]}, position=(parent.x_delta, parent.y_delta))
+        effect.life = 1000
+        return effect
+    elif type == "fox-elemental-spell":
+        effect = Effect("fox-elemental-spell", {"default":["attack-" + Enemy.boss_elements[Enemy.boss_element]+".png"]}, {"ALWAYS":[('x',-5 + random.uniform(-5, 2) ), ('y',3 + + random.uniform(-1, 2) )]}, position=(parent.x_delta-50, parent.y_delta+50))
+        effect.life = 2000
+        return effect
+    elif type == "hit-spell":
+        effect = Effect("hit-spell", {"default":['spell3.png']}, {"ALWAYS":[('x',3)]}, position=(parent.x_delta, parent.y_delta))
+        effect.life = 500
         return effect
     elif type == "hit-marker":
         effect = Effect("hit-marker", {"default":['hit.png']}, position=(parent.x_delta, parent.y_delta), padding=(50, 60))
@@ -103,6 +113,21 @@ class TCGameObject(pygame.sprite.Sprite):
         if (update):
             self.updateAnimation(self.milliseconds_per_sprite)
                     
+    def setAnimationState(self, anim_name, activate, activator=""):
+        if activate:
+            if not anim_name in self.animation_activators.keys():
+                self.animation_activators[anim_name] = [activator+"SELF"]
+            else:
+                if not activator+"SELF" in self.animation_activators[anim_name]:
+                    self.animation_activators[anim_name].append(activator+"SELF")
+        else:
+            if not anim_name in self.animation_activators.keys():
+                self.animation_activators[anim_name] = []
+            else:
+                if activator+"SELF" in self.animation_activators[anim_name]:
+                    self.animation_activators[anim_name].remove(activator+"SELF")
+        #self.updateAnimation(self.milliseconds_per_sprite)
+            
     #Add this draw function so we can draw individual sprites
     def updatePosition(self):
         
@@ -143,10 +168,13 @@ class TCGameObject(pygame.sprite.Sprite):
     def updateAnimation(self, timePassedLastFrame):
         active_animation_name = None
         
+        max = 0
+        
         for animation_name in self.animations:
-            if animation_name in self.animation_activators and len(self.animation_activators[animation_name]) > 0:
+            if animation_name in self.animation_activators and len(self.animation_activators[animation_name]) > max:
                 active_animation_name = animation_name
-            
+                max = len(self.animation_activators[animation_name])
+                
         if (active_animation_name == None):
             if ("default" in self.animations):
                 active_animation_name = "default"
@@ -172,8 +200,8 @@ class TCGameObject(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.updatePosition()
         
-    
     def processKeys(self, keys_pressed):
+    
         for key in keys_pressed:
             if keys_pressed[key]:
                 #positive
@@ -206,32 +234,15 @@ class TCGameObject(pygame.sprite.Sprite):
                                 self.jump = delta[1]
                                 self.canJump = False
                         elif delta[0] in self.animations:
-                            activator = str(key)
-                            anim = delta[0]
-                            target = delta[1]
-                            if target:
-                                if not activator in self.animation_activators[anim]:
-                                    self.animation_activators[anim].append(activator)
-                            else:
-                                #target is false, activator is present
-                                if activator in self.animation_activators[anim]:
-                                    self.animation_activators[anim].remove(activator)
+                            self.setAnimationState(delta[0], delta[1], key)
             else:
                 #negative
                 if key in self.key_press_responses:
                     deltaList = self.key_press_responses[key]
                     for delta in deltaList:
                         if delta[0] in self.animations:
-                            activator = str(key)
-                            anim = delta[0]
-                            target = not delta[1]
-                            if target:
-                                if not activator in self.animation_activators[anim]:
-                                    self.animation_activators[anim].append(activator)
-                            else:
-                                #target is false, activator is present
-                                if activator in self.animation_activators[anim]:
-                                    self.animation_activators[anim].remove(activator)
+                            self.setAnimationState(delta[0], not delta[1], key)
+                            
 
     def isOnGround(self):
         return self.distToGround() <= 0
@@ -254,11 +265,14 @@ class TCGameObject(pygame.sprite.Sprite):
         GRAVITY = 5
         
         if (self.jump > 0):
+            #self.setAnimationState('stand', True)
             self.jump -= 1
             self.y_delta += -10 if (self.jump < 5) else -15
-        elif (not onGround):
-            to_ground = self.distToGround()
-            self.y_delta += (GRAVITY * self.mass) if (to_ground >= GRAVITY*self.mass) else to_ground
+        else:
+            #self.setAnimationState('stand', False)
+            if (not onGround):
+                to_ground = self.distToGround()
+                self.y_delta += (GRAVITY * self.mass) if (to_ground >= GRAVITY*self.mass) else to_ground
 
             
 class Effect(TCGameObject):
@@ -286,6 +300,8 @@ class Enemy(TCGameObject):
     user_speed_modifier = 0
     level_speed_modifier = 0
     disable_scrolling = False
+    boss_element = 0
+    boss_elements = ["fire", "water", "earth"]
     
     def get_speed(base_increase=0):
         return 0 if Enemy.disable_scrolling else (Enemy.user_speed_modifier + Enemy.base_speed + base_increase + Enemy.level_speed_modifier)
@@ -296,23 +312,60 @@ class Enemy(TCGameObject):
         self.hp = 10
         self.scroll_direction = 1
         self.x_bounded_by = [0,0]
+        self.spells = None
+        self.last_attack = 0
+        self.dead = False
         
     def update(self, keys_pressed, clock):
         TCGameObject.update(self, keys_pressed, clock)
+        if self.hp <= 0:
+            if not self.dead:
+                self.key_press_responses = {"ALWAYS":[('y', 20)]}
+                self.dead = True
+            else:
+                if self.y_delta >= 700:
+                    self.kill()
+            
         
     def checkHits(self, group):
+        
+        if self.dead:
+            return
         
         collisions = pygame.sprite.spritecollide(self, group, False, pygame.sprite.collide_circle_ratio(0.75))
         
         for thing in collisions:
-            if thing.name == "shoot-spell":
-                self.hp -= 1
+            if thing.name == "shoot-spell" or thing.name == "hit-spell":
+                self.hp -= 1 if thing.name == "shoot-spell" else 3
                 if TCGameObject.scene_groups != None and bool(random.getrandbits(1)):
                     TCGameObject.scene_groups["effects"].add(makeEffect("hit-marker", thing))
-                
-        if self.hp <= 0:
-            self.kill()
         
+    
+    def attack(self, clock, target):
+        #can only attack if spell list is set
+        if not self.dead and self.spells != None and len(self.spells) > 0:
+            #will add spell into own layer (i.e. "enemy" layer)
+            my_groups = self.groups()
+            if self.last_attack < 700:
+                self.last_attack += clock.get_time()
+            else:
+                self.last_attack = 0
+                if my_groups != None and len(my_groups) >= 1 and my_groups[0] != None:
+                        for spell in self.spells:
+                            if bool(random.getrandbits(1)):
+                                if spell == "heal-spell":
+                                    if self.hp <= 20:
+                                        self.hp += 2
+                                        my_groups[0].add(makeEffect(spell, self))
+                                else:
+                                    attack_effect = makeEffect(spell, self)
+                                    #hack to target player, instead of using random movement vector generated in makeEffect()
+                                    x_step = (target.x_delta-attack_effect.x_delta)/10
+                                    y_step = (target.y_delta-attack_effect.y_delta)/10
+                                    attack_effect.key_press_responses = {"ALWAYS":[('x', x_step), ('y', y_step)]}
+                                    my_groups[0].add(attack_effect)
+                                break
+                                
 class Background(TCGameObject):
             
     def __init__(self, name, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
