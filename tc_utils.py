@@ -435,8 +435,9 @@ class Enemy(TCGameObject):
         for thing in collisions:
             if thing.name == "shoot-spell" or thing.name == "hit-spell":
                 dmg = (1*BASE_HP) if thing.name == "shoot-spell" else (3*BASE_HP)
+                #less bonus if high dmg on low hp, e.g. attack after casting "old-ening" spell
+                Enemy.damage_recieved += min(self.hp, dmg)
                 self.hp -= dmg
-                Enemy.damage_recieved += dmg
                 if TCGameObject.scene_groups != None and bool(random.getrandbits(1)):
                     TCGameObject.scene_groups["effects"].add(makeEffect("hit-marker", thing))
         

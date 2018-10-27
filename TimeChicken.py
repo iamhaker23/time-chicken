@@ -578,6 +578,12 @@ class Game:
                                         enemy.hp -= 15
                                     else:
                                         enemy.hp -= 30
+                            for enemy in harmless:
+                                if enemy.type == "ENEMY":
+                                    if not enemy.name in boss_names:
+                                        enemy.hp -= 15
+                                    else:
+                                        enemy.hp -= 30
                         elif current_spell == spellsList[5]:
                             successful_cast = True
                             boss_names = ["ultimate-fox", "psychic-fox", "master-fox"]
