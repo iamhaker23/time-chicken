@@ -130,7 +130,7 @@ class Game:
         #MOCK final bossfight
         #self.next_boss = "ultimate-fox"
         #bossfight_wins = 6
-        hp = 5
+        #hp = 5
         #distance_to_next_bossfight = 2.0
         
         BASE_HEAL_AMOUNT = 10
@@ -489,6 +489,13 @@ class Game:
                         layer3.add(makeEffect("hit-spell", chicken))
                     elif current_spell == spellsList[4]:
                         egg.setAnimationState("demon-attack", True, override=True)
+                        boss_names = ["ultimate-fox", "psychic-fox", "master-fox"]
+                        for enemy in enemies:
+                            if enemy.type == "ENEMY":
+                                if not enemy.name in boss_names:
+                                    enemy.hp = 0
+                                else:
+                                    enemy.hp -= 30
                     cast = 20
                     chicken.setAnimationState('walk', False)
                     chicken.setAnimationState('cast', True)
