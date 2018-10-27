@@ -32,7 +32,7 @@ class Menu:
         picture = ""
         
         #"\n \n" is a hack for a blank line
-        story_text = "Will you save the egg?\n \nHelp it through the forest\nand avoid other animals."
+        story_text = "All the other creatures\nof the realm fear\nThe Demons.\nBut somewhere\nbetween travelling\nand mastering magic:\nyou learned to value\nall life\n- no matter\nhow terrifying.\nEscape the realm and\nprotect Egg\nfrom the forces of good."
         
         TCGameObject.image_home = IMAGE_HOME
         
@@ -92,7 +92,7 @@ class Menu:
             clock.tick(60)
             
         if picture != "":
-            ShowPicture(picture, 3000, message=story_text, split="\n").run()
+            ShowPicture(picture, 8000, message=story_text, split="\n").run()
         
 
 class ShowPicture:
@@ -181,7 +181,7 @@ class Game:
         #bossfight_wins = 6
         
         chicken_xp = 0
-        xp_levels = {"Apprentice":50, "Assistant":100, "Wizard":3000}
+        xp_levels = {"Beginner":0, "Student":200, "Apprentice":1000, "Assistant":2000, "Wizard":5000}
         old_xp_level = ""
         xp_level = ""
                 
@@ -291,13 +291,14 @@ class Game:
         lastSpell = ""
         spell_queue = []
         spells = {
-            "toot":{"description" : "gets them everytime", "cooldown": 0}
-            ,"cluck":{"description" : "???", "cooldown": 0}
-            ,"pipipi":{"description" : "???", "cooldown": 0}
-            ,"kukareku":{"description" : "???", "cooldown": 0}
-            ,"qwe":{"description" : "???", "cooldown": 0}
-            ,"old":{"description" : "???", "cooldown": 0}
+            "toot":{"description" : "Heals feelings AND injuries.", "cooldown": 0}
+            ,"cluck":{"description" : "Nudge flow of time.", "cooldown": 0}
+            ,"pipipi":{"description" : "A ranged attack", "cooldown": 0}
+            ,"kukareku":{"description" : "A close attack", "cooldown": 0}
+            ,"cheekpeep":{"description" : "Increase the flow of Demon Time", "cooldown": 0}
+            ,"tocktock":{"description" : "REALLY nudge the flow of time", "cooldown": 0}
         }
+        
         message = {"text":"", "color": (255, 255, 255), "frames":0, "position":(0,0)}
         speech = {"text":"", "color": (255, 255, 255), "frames":0, "position":(400, 200)}
 
@@ -683,7 +684,7 @@ class Game:
         
         if win_screen and not self.closegame:
             ShowPicture("story-2.png", 3000).run()
-            ShowPicture("story-3.png", 3000, "You got the egg to\nThe Demon Realm!", "\n").run()
+            ShowPicture("story-3.png", 3000, "You got Egg to\nThe Demon Realm!", "\n").run()
         elif self.game_type == "ENDLESS" and not self.closegame:
             if not reset:
                 ShowPicture("story-3.png", 3000, "You got the egg\n \n" + "{:.1f}".format(distance) + "m\n \ncloser to the safety of\nThe Demon Realm!", "\n").run()

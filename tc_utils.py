@@ -56,7 +56,7 @@ def makeEffect(type, parent):
         return effect
     elif type == "fox-wall-spell":
         element = Enemy.boss_elements[Enemy.boss_element] if parent.name != "ultimate-fox" else Enemy.boss_elements[random.randint(0, len(Enemy.boss_elements)-1)]
-        effect = Effect("fox-wall-spell", {"default":["wall-" + element +".png"]}, {"ALWAYS":[('x',-5 + random.uniform(-5, 2) ), ('x-min', -50)]}, position=(parent.x_delta-(10*random.uniform(0, 9)), parent.y_delta+100))
+        effect = Effect("fox-wall-spell", {"default":["wall-" + element +"1.png","wall-" + element +"2.png"]}, {"ALWAYS":[('x',-5 + random.uniform(-5, 2) ), ('x-min', -50)]}, position=(parent.x_delta-(10*random.uniform(0, 9)), parent.y_delta+100))
         effect.life = 4000
         return effect
     elif type == "hit-spell":
