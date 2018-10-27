@@ -7,7 +7,7 @@ def makeEnemy(type):
         badgerControl = {
             "ALWAYS":[('x-speed', -1.0), ('x-min', -200)]
         }
-        badger = Enemy("badger", {"default":['BigBadger_1.png','BigBadger_2.png']}, badgerControl, (700, 200), (0, 0))
+        badger = Enemy("badger", {"default":['BigBadger_1.png','BigBadger_2.png'], "old":["oldbadger1.png", "oldbadger2.png"]}, badgerControl, (700, 200), (0, 0))
         badger.milliseconds_per_sprite = 100.0
         return badger
     elif type == "psychic-fox":
@@ -33,8 +33,10 @@ def makeEnemy(type):
             "ALWAYS":[('x', -5.0), ('x-min-stop', 450)]
         }
         fox = Enemy("ultimate-fox", {"default":['UltimateBossA.png','UltimateBossB.png'],"cast":['UltimateBoss1.png','UltimateBoss2.png','UltimateBoss3.png','UltimateBoss4.png','UltimateBoss5.png','UltimateBoss6.png','UltimateBoss7.png','UltimateBoss8.png']}, foxControl, (610, 100), (0, 0))
-        fox.milliseconds_per_sprite = 100.0
+        fox.milliseconds_per_sprite = 400.0
         fox.hp = 120
+        fox.attack_cooldown = 2000
+        fox.hp = 10
         fox.spells = ["fox-elemental-spell", "heal-spell", "fox-wall-spell"]
         return fox
     return None
@@ -59,6 +61,10 @@ def makeEffect(type, parent):
         return effect
     elif type == "hit-spell":
         effect = Effect("hit-spell", {"default":['spell3.png']}, {"ALWAYS":[('x',3)]}, position=(parent.x_delta, parent.y_delta))
+        effect.life = 500
+        return effect
+    elif type == "demon-spell":
+        effect = Effect("demon-spell", {"default":['attack-fire.png']}, position=(parent.x_delta, parent.y_delta))
         effect.life = 500
         return effect
     elif type == "hit-marker":
@@ -155,33 +161,38 @@ class TCGameObject(pygame.sprite.Sprite):
             self.animations[animation_name] = []
             self.animations_image_names[animation_name] = []
             
-            self.animation_activators[animation_name] = []
+            self.animation_activators[animation_name] = {"activators": [], "stop-on-last-frame": False, "reset-speed": 0}
             for image in animation_images:
                 self.animations[animation_name].append(pygame.image.load(TCGameObject.image_home + image))
                 self.animations_image_names[animation_name].append(image)
         if (update):
             self.updateAnimation(self.milliseconds_per_sprite)
                     
-    def setAnimationState(self, anim_name, activate, activator="", override=False):
+    def setAnimationState(self, anim_name, activate, activator="", override=False, play_stop=False, reset_speed=0):
         
         if override and activate:
             #deactivate all others
             self.currentFrame = 0
             for key in list(self.animation_activators.keys()):
-                self.animation_activators[key] = []
+                self.animation_activators[key]["activators"] = []
     
         if activate:
             if not anim_name in self.animation_activators.keys():
-                self.animation_activators[anim_name] = [activator+"SELF"]
+                self.animation_activators[anim_name]["activators"] = [activator+"SELF"]
             else:
                 if not activator+"SELF" in self.animation_activators[anim_name]:
-                    self.animation_activators[anim_name].append(activator+"SELF")
+                    self.animation_activators[anim_name]["activators"].append(activator+"SELF")
+            
         else:
             if not anim_name in self.animation_activators.keys():
-                self.animation_activators[anim_name] = []
+                self.animation_activators[anim_name]["activators"] = []
             else:
                 if activator+"SELF" in self.animation_activators[anim_name]:
-                    self.animation_activators[anim_name].remove(activator+"SELF")
+                    self.animation_activators[anim_name]["activators"].remove(activator+"SELF")
+                    
+        self.animation_activators[anim_name]["stop-on-last-frame"] = play_stop
+        if play_stop and reset_speed != 0:
+            self.animation_activators[anim_name]["reset-speed"] = reset_speed
         #self.updateAnimation(self.milliseconds_per_sprite)
             
     #Add this draw function so we can draw individual sprites
@@ -230,9 +241,18 @@ class TCGameObject(pygame.sprite.Sprite):
         #If so, remove from list
                 
         for animation_name in self.animations:
-            if animation_name in self.animation_activators and len(self.animation_activators[animation_name]) > max:
-                active_animation_name = animation_name
-                max = len(self.animation_activators[animation_name])
+            if animation_name in self.animation_activators:
+                
+                on_last_frame = self.animation_activators[animation_name]["stop-on-last-frame"] and self.image_name == self.animations_image_names[animation_name][-1]
+                if len(self.animation_activators[animation_name]["activators"]) > max:
+                    active_animation_name = animation_name
+                    max = len(self.animation_activators[animation_name]["activators"])
+                if on_last_frame:
+                    self.animation_activators[animation_name]["stop-on-last-frame"] = False
+                    self.animation_activators[animation_name]["activators"] = []
+                    if self.animation_activators[animation_name]["reset-speed"] != 0:
+                        self.milliseconds_per_sprite = self.animation_activators[animation_name]["reset-speed"]
+                    self.animation_activators[animation_name]["reset-speed"] = 0
                 
                 
         if (active_animation_name == None):
@@ -362,12 +382,19 @@ class Effect(TCGameObject):
             
 class Enemy(TCGameObject):
     
+
+    
+    boss_elements = ["fire", "water", "earth"]
+    
+    disable_scrolling = False
+    boss_element = 0
+    player_hit_bonus = 1
+    attack_bonus = 1
+    enemies_killed = 0
     base_speed = 3
     user_speed_modifier = 0
     level_speed_modifier = 0
-    disable_scrolling = False
-    boss_element = 0
-    boss_elements = ["fire", "water", "earth"]
+    damage_recieved = 0
     
     def get_speed(base_increase=0):
         return 0 if Enemy.disable_scrolling else (Enemy.user_speed_modifier + Enemy.base_speed + base_increase + Enemy.level_speed_modifier)
@@ -382,6 +409,7 @@ class Enemy(TCGameObject):
         self.last_attack = 0
         self.dead = False
         self.attack_cooldown = 1200
+        self.old = False
         
     def update(self, keys_pressed, clock):
         TCGameObject.update(self, keys_pressed, clock)
@@ -389,6 +417,7 @@ class Enemy(TCGameObject):
             if not self.dead:
                 self.key_press_responses = {"ALWAYS":[('y', 20)]}
                 self.dead = True
+                Enemy.enemies_killed += 1
             else:
                 if self.y_delta >= 700:
                     self.kill()
@@ -396,7 +425,7 @@ class Enemy(TCGameObject):
         
     def checkHits(self, group):
         
-        BASE_HP = 1 if self.name != "ultimate-fox" else 0.2
+        BASE_HP = (1 if self.name != "ultimate-fox" else 0.2) * Enemy.player_hit_bonus
         
         if self.dead:
             return
@@ -405,7 +434,9 @@ class Enemy(TCGameObject):
         
         for thing in collisions:
             if thing.name == "shoot-spell" or thing.name == "hit-spell":
-                self.hp -= (1*BASE_HP) if thing.name == "shoot-spell" else (3*BASE_HP)
+                dmg = (1*BASE_HP) if thing.name == "shoot-spell" else (3*BASE_HP)
+                self.hp -= dmg
+                Enemy.damage_recieved += dmg
                 if TCGameObject.scene_groups != None and bool(random.getrandbits(1)):
                     TCGameObject.scene_groups["effects"].add(makeEffect("hit-marker", thing))
         
@@ -424,7 +455,8 @@ class Enemy(TCGameObject):
                             if bool(random.getrandbits(1)):
                                 
                                 if self.name == "ultimate-fox":
-                                    self.setAnimationState('cast', True)
+                                    self.milliseconds_per_sprite = 200.0
+                                    self.setAnimationState('cast', True, override=True, play_stop=True, reset_speed=400.0)
                                 
                                 if spell == "heal-spell":
                                     if self.hp <= 20:
