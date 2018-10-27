@@ -10,14 +10,32 @@ def makeEnemy(type):
         badger = Enemy("badger", {"default":['BigBadger_1.png','BigBadger_2.png']}, badgerControl, (700, 200), (0, 0))
         badger.milliseconds_per_sprite = 100.0
         return badger
-    elif type == "fox":
+    elif type == "psychic-fox":
         foxControl = {
             "ALWAYS":[('x', -1.0), ('x-min-reverse', 400), ('x-max-reverse', 611)]
         }
-        fox = Enemy("fox", {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (610, 100), (0, 0))
+        fox = Enemy("psychic-fox", {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (610, 100), (0, 0))
         fox.milliseconds_per_sprite = 200.0
         fox.hp = 100
         fox.spells = ["fox-elemental-spell", "heal-spell"]
+        return fox
+    elif type == "master-fox":
+        foxControl = {
+            "ALWAYS":[('x', -1.0), ('x-min-reverse', 400), ('x-max-reverse', 611)]
+        }
+        fox = Enemy("master-fox", {"default":['Fox1.png','Fox2.png','Fox3.png','Fox4.png','Fox5.png','Fox6.png','Fox7.png','Fox8.png','Fox9.png']}, foxControl, (610, 100), (0, 0))
+        fox.milliseconds_per_sprite = 200.0
+        fox.hp = 100
+        fox.spells = ["fox-elemental-spell", "heal-spell", "fox-wall-spell"]
+        return fox
+    elif type == "ultimate-fox":
+        foxControl = {
+            "ALWAYS":[('x', -5.0), ('x-min-stop', 450)]
+        }
+        fox = Enemy("ultimate-fox", {"default":['UltimateBossA.png','UltimateBossB.png'],"cast":['UltimateBoss1.png','UltimateBoss2.png','UltimateBoss3.png','UltimateBoss4.png','UltimateBoss5.png','UltimateBoss6.png','UltimateBoss7.png','UltimateBoss8.png']}, foxControl, (610, 100), (0, 0))
+        fox.milliseconds_per_sprite = 100.0
+        fox.hp = 120
+        fox.spells = ["fox-elemental-spell", "heal-spell", "fox-wall-spell"]
         return fox
     return None
     
@@ -30,8 +48,14 @@ def makeEffect(type, parent):
         effect.life = 1000
         return effect
     elif type == "fox-elemental-spell":
-        effect = Effect("fox-elemental-spell", {"default":["attack-" + Enemy.boss_elements[Enemy.boss_element]+".png"]}, {"ALWAYS":[('x',-5 + random.uniform(-5, 2) ), ('y',3 + + random.uniform(-1, 2) )]}, position=(parent.x_delta-50, parent.y_delta+50))
+        offset = 50 if parent.name != "ultimate-fox" else 100
+        effect = Effect("fox-elemental-spell", {"default":["attack-" + Enemy.boss_elements[Enemy.boss_element]+".png"]}, {"ALWAYS":[('x',-5 + random.uniform(-5, 2) ), ('y',3 + + random.uniform(-1, 2) )]}, position=(parent.x_delta-offset, parent.y_delta+offset))
         effect.life = 2000
+        return effect
+    elif type == "fox-wall-spell":
+        element = Enemy.boss_elements[Enemy.boss_element] if parent.name != "ultimate-fox" else Enemy.boss_elements[random.randint(0, len(Enemy.boss_elements)-1)]
+        effect = Effect("fox-wall-spell", {"default":["wall-" + element +".png"]}, {"ALWAYS":[('x',-5 + random.uniform(-5, 2) ), ('x-min', -50)]}, position=(parent.x_delta-(10*random.uniform(0, 9)), parent.y_delta+100))
+        effect.life = 4000
         return effect
     elif type == "hit-spell":
         effect = Effect("hit-spell", {"default":['spell3.png']}, {"ALWAYS":[('x',3)]}, position=(parent.x_delta, parent.y_delta))
@@ -48,20 +72,39 @@ class TCGameObject(pygame.sprite.Sprite):
 
     scene_groups = None
     image_home = ""
+    
         
     def update(self, keys_pressed=None, clock=None):
-        self.doPhysics()
-        if clock != None:
-            self.updateAnimation(clock.get_time())
-        if (self.key_press_responses != None):
-            if keys_pressed != None:
-                self.processKeys(keys_pressed)
-        self.updatePosition()
+        
+        if self.name == "chicken" and self.dead:
+            Enemy.disable_scrolling = True
+            if self.time_since_dead == 0:
+                self.setAnimationState('dead', True, override=True)
+            else:
+                if self.image_name == "chicken_death_5.png":
+                    self.game_reset_flag = True
+            self.time_since_dead += clock.get_time()
+            self.doPhysics()
+            if clock != None:
+                self.updateAnimation(clock.get_time())
+            self.updatePosition()
+        else:
+            self.doPhysics()
+            if clock != None:
+                self.updateAnimation(clock.get_time())
+            if (self.key_press_responses != None):
+                if keys_pressed != None:
+                    self.processKeys(keys_pressed)
+            self.updatePosition()
         
     def __init__(self, name, animation_config=None, key_press_responses=None, position=(0,0), padding=(0,0), parent=None):
         pygame.sprite.Sprite.__init__(self)
         
         ######## START INSTANCE VARIABLES
+        self.dead = False
+        self.time_since_dead = 0
+        self.game_reset_flag = False
+        
         self.type="DEFAULT"
         self.parent = parent
         self.slowParentDelay = 0
@@ -84,6 +127,7 @@ class TCGameObject(pygame.sprite.Sprite):
         self.padding = padding
         
         self.animations = {}
+        self.animations_image_names = {}
         self.animation_activators = {}
         ##############
         
@@ -94,6 +138,7 @@ class TCGameObject(pygame.sprite.Sprite):
         self.milliseconds_per_sprite = 1000.0/fps
         #hack to force first frame
         self.image = None
+        self.image_name = ""
         self.updateAnimation(self.milliseconds_per_sprite)
         
         #fallback if no animations of image is set
@@ -106,14 +151,25 @@ class TCGameObject(pygame.sprite.Sprite):
     def setAnimations(self, conf, update=False):
         for animation_name in conf:
             animation_images = conf[animation_name]
+            
             self.animations[animation_name] = []
+            self.animations_image_names[animation_name] = []
+            
             self.animation_activators[animation_name] = []
             for image in animation_images:
                 self.animations[animation_name].append(pygame.image.load(TCGameObject.image_home + image))
+                self.animations_image_names[animation_name].append(image)
         if (update):
             self.updateAnimation(self.milliseconds_per_sprite)
                     
-    def setAnimationState(self, anim_name, activate, activator=""):
+    def setAnimationState(self, anim_name, activate, activator="", override=False):
+        
+        if override and activate:
+            #deactivate all others
+            self.currentFrame = 0
+            for key in list(self.animation_activators.keys()):
+                self.animation_activators[key] = []
+    
         if activate:
             if not anim_name in self.animation_activators.keys():
                 self.animation_activators[anim_name] = [activator+"SELF"]
@@ -170,10 +226,14 @@ class TCGameObject(pygame.sprite.Sprite):
         
         max = 0
         
+        #TODO: check here for animation_activators "terminate conditions"
+        #If so, remove from list
+                
         for animation_name in self.animations:
             if animation_name in self.animation_activators and len(self.animation_activators[animation_name]) > max:
                 active_animation_name = animation_name
                 max = len(self.animation_activators[animation_name])
+                
                 
         if (active_animation_name == None):
             if ("default" in self.animations):
@@ -182,6 +242,7 @@ class TCGameObject(pygame.sprite.Sprite):
                 return
             
         images = self.animations[active_animation_name]
+        image_names = self.animations_image_names[active_animation_name]
         
         if (self.timeSinceLastFrame + timePassedLastFrame >= self.milliseconds_per_sprite):
             self.timeSinceLastFrame = 0
@@ -194,6 +255,7 @@ class TCGameObject(pygame.sprite.Sprite):
         #update current frame, image and bounds
         self.currentFrame = self.currentFrame if (self.currentFrame < len(images)) else 0
         self.image = images[self.currentFrame]
+        self.image_name = image_names[self.currentFrame]
         self.updateRect()
         
     def updateRect(self):
@@ -226,6 +288,10 @@ class TCGameObject(pygame.sprite.Sprite):
                         elif delta[0] == 'x-min-reverse':
                             if self.rect.x <= delta[1]:
                                 self.scroll_direction = -1
+                        elif delta[0] == 'x-min-stop':
+                            if self.rect.x <= delta[1]:
+                                self.scroll_direction = 0
+                                Enemy.disable_scrolling = True
                         elif delta[0] == 'x-max-reverse':
                             if self.rect.x >= delta[1]:
                                 self.scroll_direction = 1
@@ -315,6 +381,7 @@ class Enemy(TCGameObject):
         self.spells = None
         self.last_attack = 0
         self.dead = False
+        self.attack_cooldown = 1200
         
     def update(self, keys_pressed, clock):
         TCGameObject.update(self, keys_pressed, clock)
@@ -329,6 +396,8 @@ class Enemy(TCGameObject):
         
     def checkHits(self, group):
         
+        BASE_HP = 1 if self.name != "ultimate-fox" else 0.2
+        
         if self.dead:
             return
         
@@ -336,7 +405,7 @@ class Enemy(TCGameObject):
         
         for thing in collisions:
             if thing.name == "shoot-spell" or thing.name == "hit-spell":
-                self.hp -= 1 if thing.name == "shoot-spell" else 3
+                self.hp -= (1*BASE_HP) if thing.name == "shoot-spell" else (3*BASE_HP)
                 if TCGameObject.scene_groups != None and bool(random.getrandbits(1)):
                     TCGameObject.scene_groups["effects"].add(makeEffect("hit-marker", thing))
         
@@ -346,23 +415,29 @@ class Enemy(TCGameObject):
         if not self.dead and self.spells != None and len(self.spells) > 0:
             #will add spell into own layer (i.e. "enemy" layer)
             my_groups = self.groups()
-            if self.last_attack < 700:
+            if self.last_attack < self.attack_cooldown:
                 self.last_attack += clock.get_time()
             else:
                 self.last_attack = 0
                 if my_groups != None and len(my_groups) >= 1 and my_groups[0] != None:
                         for spell in self.spells:
                             if bool(random.getrandbits(1)):
+                                
+                                if self.name == "ultimate-fox":
+                                    self.setAnimationState('cast', True)
+                                
                                 if spell == "heal-spell":
                                     if self.hp <= 20:
                                         self.hp += 2
                                         my_groups[0].add(makeEffect(spell, self))
                                 else:
                                     attack_effect = makeEffect(spell, self)
-                                    #hack to target player, instead of using random movement vector generated in makeEffect()
-                                    x_step = (target.x_delta-attack_effect.x_delta)/10
-                                    y_step = (target.y_delta-attack_effect.y_delta)/10
-                                    attack_effect.key_press_responses = {"ALWAYS":[('x', x_step), ('y', y_step)]}
+                                    if spell == "fox-elemental-spell":
+                                        #hack to target player, instead of using random movement vector generated in makeEffect()
+                                        x_step = ((target.x_delta+10)-attack_effect.x_delta)/10
+                                        y_step = ((target.y_delta+20)-attack_effect.y_delta)/10
+                                        attack_effect.key_press_responses = {"ALWAYS":[('x', x_step), ('y', y_step)]}
+                                        
                                     my_groups[0].add(attack_effect)
                                 break
                                 
